@@ -2,14 +2,14 @@
 
 A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid. It is Long-Only and Ping-Pong for now.
 
-⚠️: Data in `HL_data_collector/HL_data` is a subsample of the real BTC data on Hyperliquid. Due to GitHub limitations, I cannot include the actual data, which is approximately a hundred MB per day. You should collect data yourself for several days before obtaining reliable {`sigma`, `k`, `gamma`} parameter estimation/calibration. Running `docker-compose build` then `docker-compose up` will start data collection as well as Freqtrade trading with inaccurate {`sigma`, `k`, `gamma`} parameters for the first couple of days. After running for a couple of days, you can leave it as is or reset the Freqtrade trading by stopping with `docker-compose down`, removing the `tradesv3.sqlite` database, and restarting with `docker-compose up` (`docker-compose up -d` to run as a daemon in the background).
+⚠️: Data in `HL_data_collector/HL_data` is a subsample of the real BTC data on Hyperliquid. Due to GitHub limitations, I cannot include the actual data, which is approximately a hundred MB per day. You should collect data yourself for several days before obtaining reliable {`σ`, `k`, `γ`} parameter estimation/calibration. Running `docker-compose build` then `docker-compose up` will start data collection as well as Freqtrade trading with inaccurate {`σ`, `k`, `γ`} parameters for the first couple of days. After running for a couple of days, you can leave it as is or reset the Freqtrade trading by stopping with `docker-compose down`, removing the `tradesv3.sqlite` database, and restarting with `docker-compose up` (`docker-compose up -d` to run as a daemon in the background).
 
 ## Overview
 
 This project implements an advanced market making strategy that:
 
 - **Dynamically calculates optimal bid-ask spreads** using the Avellaneda-Stoikov market making model
-- **Continuously adapts to market conditions** through real-time parameter estimation (`sigma`, `k`, `gamma`)
+- **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `k`, `γ`)
 - **Integrates with Hyperliquid exchange** for high-frequency trading
 - **Uses mathematical optimization** to minimize inventory risk while maximizing profits
 
@@ -124,6 +124,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
