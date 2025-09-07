@@ -1,6 +1,6 @@
 # Advanced Avellaneda-Stoikov Market Making with Freqtrade
 
-A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid.
+A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid. It is Long-Only and Ping-Pong for now.
 
 ⚠️: Data in `HL_data_collector/HL_data` is a subsample of the real BTC data on Hyperliquid. Due to GitHub limitations, I cannot include the actual data, which is about a hundred MB per day. You should collect data yourself for several days before obtaining a reliable {sigma,k,gamma} parameters estimation/calibration. Running `docker-compose build` then `docker-compose up` will start data collection, as well as Freqtrade trading, with inaccurate {sigma,k,gamma} parameters for a couple of days. After a couple of days running have passed,yYou can leave it as it is or reset the Freqtrade trading by stopping with `docker-compose down`, removing the `tradesv3.sqlite` database and restarting with `docker-compose up` (`docker-compose up -d` to run as deamon, in background).
 
@@ -176,6 +176,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
