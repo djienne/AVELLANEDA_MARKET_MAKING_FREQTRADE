@@ -141,81 +141,6 @@ Where:
 - **Parameter adaptation**: Respond to changing market microstructure
 - **Execution quality**: Minimize adverse selection and latency costs
 
-## Setup and Installation
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Python 3.9+
-- Hyperliquid API credentials
-
-### Quick Start
-
-1. **Clone and configure:**
-   ```bash
-   # Configure exchange credentials in user_data/config.json
-   # Set your Hyperliquid API keys
-   ```
-
-2. **Start data collection:**
-   ```bash
-   # The HL data collector runs as a separate service
-   docker compose up -d hl-collector
-   ```
-   Will write orderbook, price and orders data flow to files in directory `HL_data_collector/HL_data`
-
-3. **Run the strategy:**
-   ```bash
-   # cd to root directory of this project  
-   docker compose up -d freqtrade_mm
-   ```
-   Only use in dry-run (paper trading)
-   Monitor from Freqtrade web client at http://localhost:3004 (user: MM, pass: MM)
-
-## Configuration
-
-### Main Configuration (`user_data/config.json`)
-Currently configured for BTC trading:
-```json
-{
-    "max_open_trades": 1,
-    "stake_currency": "USDC", 
-    "stake_amount": 20,
-    "trading_mode": "futures",
-    "exchange": {
-        "name": "hyperliquid",
-        "pair_whitelist": ["BTC/USDC:USDC"]
-    },
-    "unfilledtimeout": {
-        "entry": 15,
-        "exit": 15
-    }
-}
-```
-
-### Parameter Files
-
-The system maintains dynamic parameters in JSON files:
-
-- `scripts/avellaneda_parameters_BTC.json`: Contains γ (gamma), k, and σ (sigma) parameters
-- Parameters are calculated by `calculate_avellaneda_parameters.py`
-- Updated through `run_avellaneda_param_calculation.py` during strategy execution
-
-## Usage Examples
-
-### Manual Parameter Calculation
-
-```bash
-# Calculate Avellaneda parameters for BTC (default)
-python scripts/calculate_avellaneda_parameters.py
-
-# For other assets, modify TICKER variable in the script
-# Available: BTC, ETH, SOL, WLFI
-
-# View current parameters
-cat scripts/avellaneda_parameters_BTC.json
-```
-
 ## Key Components
 
 ### avellaneda.py
@@ -241,7 +166,7 @@ The main strategy implementing the Avellaneda-Stoikov model:
 - **Position limits**: Single position with $20 USDC stake size
 - **Order timeouts**: 15-second unfilled order cancellation  
 - **Risk aversion parameter**: γ controls inventory penalty strength
-- **Dry-run only**: Currently configured for paper trading safety
+- **Dry-run only**: Currently configured for paper trading
 
 ## Disclaimer
 
@@ -250,9 +175,8 @@ ONLY USE IN DRY-RUN
 
 ## License
 
-
-
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
