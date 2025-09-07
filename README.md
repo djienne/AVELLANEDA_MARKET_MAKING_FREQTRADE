@@ -72,43 +72,6 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 
 **Core Model Elements:**
 
-| Element | Formula | Interpretation |
-|---------|---------|----------------|
-| **Mid-price dynamics** | `dS_t = σ dW_t` | Geometric Brownian motion with volatility σ |
-| **Order arrivals** | `λ(δ) = A e^(-k δ)` | Exponential intensity function of spread δ |
-| **Optimal spreads** | `δ_a = δ_b + (2q + 1)γσ²τ/2` | Asymmetric spreads based on inventory q |
-| **Base spread** | `δ* = γσ²τ + (2/γ)ln(1 + γ/k)` | Optimal spread for zero inventory |
-| **Inventory** | `q_t`: Accumulated position from filled orders | Running inventory from market making |
-
-**Optimal Bid-Ask Strategy:**
-```
-Ask Price = S_t + δ_a = S_t + δ*/2 + γσ²τq          
-Bid Price = S_t - δ_b = S_t - δ*/2 - γσ²τq         
-```
-
-**Key Parameters:**
-- `γ`: Risk aversion parameter (inventory penalty coefficient)
-- `σ`: Asset price volatility 
-- `k`: Order book liquidity parameter (from λ(δ) = A e^(-k δ))
-- `τ`: Time remaining until strategy end
-- `q`: Current inventory position
-
-### Objective Function and Solution Method
-
-**Market Maker's Optimization Problem:**
-```
-max E[X_T + Q_T S_T - γ ∫₀ᵀ Q_t² dt]
-```
-Where:
-- `X_T`: Cash accumulated from spread capture
-- `Q_T S_T`: Mark-to-market value of final inventory  
-- `γ ∫₀ᵀ Q_t² dt`: Inventory holding penalty (risk aversion)
-
-**Solution Method - Dynamic Programming:**
-1. **Hamilton-Jacobi-Bellman equation** for value function `H(t,S,q,X)`
-2. **Optimal control** determines bid/ask placement as functions of (t,S,q)
-3. **Closed-form solution** for optimal spreads under exponential utility
-
 ### Parameter Estimation and Calibration
 
 **Gamma (γ) - Risk Aversion:**
@@ -125,20 +88,6 @@ Where:
 - Estimated from recent price returns using rolling windows
 - Calculated from high-frequency mid-price movements
 - Used for both spread calculation and risk assessment
-
-### Market Regimes and Profitability
-
-**Profitable Conditions:**
-- **High order flow** (large A): Many market orders → frequent spread capture
-- **Deep order book** (small k): Ability to set wider spreads without affecting fill rates
-- **Appropriate volatility**: Sufficient price movement for profitable opportunities
-- **Effective risk management**: Proper γ calibration for inventory control
-
-**Strategy Performance Factors:**
-- **Spread optimization**: Balance between capture probability and profit per trade
-- **Inventory management**: Minimize holding costs while maintaining market presence  
-- **Parameter adaptation**: Respond to changing market microstructure
-- **Execution quality**: Minimize adverse selection and latency costs
 
 ## Key Components
 
@@ -175,6 +124,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
