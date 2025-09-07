@@ -1,0 +1,910 @@
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO - Execution started at: 2025-09-07T19:19:35.029809+00:00
+2025-09-07 21:19:35 UTC - INFO - Log file location: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\user_data\strategies\avellaneda_runner.log
+2025-09-07 21:19:35 UTC - INFO - Current directory: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\user_data\strategies
+2025-09-07 21:19:35 UTC - INFO - Project root: C:\Users\david\Desktop\freqtrade\ADVANCED_MM
+2025-09-07 21:19:35 UTC - INFO - Script path: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\scripts\calculate_avellaneda_parameters.py
+2025-09-07 21:19:35 UTC - INFO - Lock file path: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\user_data\strategies\.avellaneda_last_run.json
+2025-09-07 21:19:35 UTC - INFO - Calculation script found: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\scripts\calculate_avellaneda_parameters.py
+2025-09-07 21:19:35 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 21:19:35 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 21:19:35 UTC - INFO - Current time (UTC): 2025-09-07T19:19:35.031356+00:00
+2025-09-07 21:19:35 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 21:19:35 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 21:19:35 UTC - INFO - Minutes since midnight UTC: 1159.58
+2025-09-07 21:19:35 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 21:19:35 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 21:19:35 UTC - INFO - Time since last run: 3:27:21.793187
+2025-09-07 21:19:35 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 32m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO -                                EXECUTION SUMMARY                                
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO - Status: SKIPPED
+2025-09-07 21:19:35 UTC - INFO - Message: Calculation already performed within the last 24 hours. Time remaining: 20h 32m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 21:19:35 UTC - INFO - Last Run: 2025-09-07T15:52:13.238169+00:00
+2025-09-07 21:19:35 UTC - INFO - Current UTC Date: 2025-09-07
+2025-09-07 21:19:35 UTC - INFO - Last Run UTC Date: 2025-09-07
+2025-09-07 21:19:35 UTC - INFO - Minutes Since Midnight UTC: 1159.58
+2025-09-07 21:19:35 UTC - INFO - Execution Schedule:
+2025-09-07 21:19:35 UTC - INFO -   • Daily at 00:05 UTC (5-minute grace period after midnight)
+2025-09-07 21:19:35 UTC - INFO -   • Daily at 03:00 UTC (data reset consideration, just in case)
+2025-09-07 21:19:35 UTC - INFO -   • After 24 hours from last run (fallback)
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO -                                EXECUTION COMPLETE                               
+2025-09-07 21:19:35 UTC - INFO - ================================================================================
+2025-09-07 21:19:35 UTC - INFO - Log file saved to: C:\Users\david\Desktop\freqtrade\ADVANCED_MM\user_data\strategies\avellaneda_runner.log
+2025-09-07 19:19:45 UTC - INFO - ================================================================================
+2025-09-07 19:19:45 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:19:45 UTC - INFO - ================================================================================
+2025-09-07 19:19:45 UTC - INFO - Execution started at: 2025-09-07T19:19:45.927118+00:00
+2025-09-07 19:19:45 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:19:45 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:19:45 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:19:45 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:19:45 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:19:45 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:19:45 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:19:45 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:19:45 UTC - INFO - Current time (UTC): 2025-09-07T19:19:45.933848+00:00
+2025-09-07 19:19:45 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:19:45 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:19:45 UTC - INFO - Minutes since midnight UTC: 1159.77
+2025-09-07 19:19:45 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:19:45 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:19:45 UTC - INFO - Time since last run: 3:27:32.695679
+2025-09-07 19:19:45 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 32m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:20:01 UTC - INFO - ================================================================================
+2025-09-07 19:20:01 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:20:01 UTC - INFO - ================================================================================
+2025-09-07 19:20:01 UTC - INFO - Execution started at: 2025-09-07T19:20:01.024427+00:00
+2025-09-07 19:20:01 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:20:01 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:20:01 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:20:01 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:01 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:20:01 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:01 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:20:01 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:20:01 UTC - INFO - Current time (UTC): 2025-09-07T19:20:01.033599+00:00
+2025-09-07 19:20:01 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:20:01 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:20:01 UTC - INFO - Minutes since midnight UTC: 1160.02
+2025-09-07 19:20:01 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:20:01 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:20:01 UTC - INFO - Time since last run: 3:27:47.795430
+2025-09-07 19:20:01 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 32m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:20:16 UTC - INFO - ================================================================================
+2025-09-07 19:20:16 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:20:16 UTC - INFO - ================================================================================
+2025-09-07 19:20:16 UTC - INFO - Execution started at: 2025-09-07T19:20:16.007192+00:00
+2025-09-07 19:20:16 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:20:16 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:20:16 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:20:16 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:16 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:20:16 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:16 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:20:16 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:20:16 UTC - INFO - Current time (UTC): 2025-09-07T19:20:16.014297+00:00
+2025-09-07 19:20:16 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:20:16 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:20:16 UTC - INFO - Minutes since midnight UTC: 1160.27
+2025-09-07 19:20:16 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:20:16 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:20:16 UTC - INFO - Time since last run: 3:28:02.776128
+2025-09-07 19:20:16 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 31m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:20:30 UTC - INFO - ================================================================================
+2025-09-07 19:20:30 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:20:30 UTC - INFO - ================================================================================
+2025-09-07 19:20:31 UTC - INFO - Execution started at: 2025-09-07T19:20:31.000102+00:00
+2025-09-07 19:20:31 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:20:31 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:20:31 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:20:31 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:31 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:20:31 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:31 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:20:31 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:20:31 UTC - INFO - Current time (UTC): 2025-09-07T19:20:31.009026+00:00
+2025-09-07 19:20:31 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:20:31 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:20:31 UTC - INFO - Minutes since midnight UTC: 1160.52
+2025-09-07 19:20:31 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:20:31 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:20:31 UTC - INFO - Time since last run: 3:28:17.770857
+2025-09-07 19:20:31 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 31m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:20:45 UTC - INFO - ================================================================================
+2025-09-07 19:20:45 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:20:46 UTC - INFO - ================================================================================
+2025-09-07 19:20:46 UTC - INFO - Execution started at: 2025-09-07T19:20:46.001149+00:00
+2025-09-07 19:20:46 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:20:46 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:20:46 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:20:46 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:46 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:20:46 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:20:46 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:20:46 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:20:46 UTC - INFO - Current time (UTC): 2025-09-07T19:20:46.008454+00:00
+2025-09-07 19:20:46 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:20:46 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:20:46 UTC - INFO - Minutes since midnight UTC: 1160.77
+2025-09-07 19:20:46 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:20:46 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:20:46 UTC - INFO - Time since last run: 3:28:32.770285
+2025-09-07 19:20:46 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 31m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:21:00 UTC - INFO - ================================================================================
+2025-09-07 19:21:00 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:21:00 UTC - INFO - ================================================================================
+2025-09-07 19:21:00 UTC - INFO - Execution started at: 2025-09-07T19:21:00.992296+00:00
+2025-09-07 19:21:00 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:21:00 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:21:00 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:21:00 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:00 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:21:00 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:00 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:21:01 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:21:01 UTC - INFO - Current time (UTC): 2025-09-07T19:21:01.001276+00:00
+2025-09-07 19:21:01 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:21:01 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:21:01 UTC - INFO - Minutes since midnight UTC: 1161.02
+2025-09-07 19:21:01 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:21:01 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:21:01 UTC - INFO - Time since last run: 3:28:47.763107
+2025-09-07 19:21:01 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 31m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:21:15 UTC - INFO - ================================================================================
+2025-09-07 19:21:15 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:21:15 UTC - INFO - ================================================================================
+2025-09-07 19:21:15 UTC - INFO - Execution started at: 2025-09-07T19:21:15.991113+00:00
+2025-09-07 19:21:15 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:21:15 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:21:15 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:21:15 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:15 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:21:15 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:15 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:21:15 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:21:16 UTC - INFO - Current time (UTC): 2025-09-07T19:21:15.999450+00:00
+2025-09-07 19:21:16 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:21:16 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:21:16 UTC - INFO - Minutes since midnight UTC: 1161.27
+2025-09-07 19:21:16 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:21:16 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:21:16 UTC - INFO - Time since last run: 3:29:02.761281
+2025-09-07 19:21:16 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 30m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:21:30 UTC - INFO - ================================================================================
+2025-09-07 19:21:30 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:21:30 UTC - INFO - ================================================================================
+2025-09-07 19:21:30 UTC - INFO - Execution started at: 2025-09-07T19:21:30.984246+00:00
+2025-09-07 19:21:30 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:21:30 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:21:30 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:21:30 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:30 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:21:30 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:21:30 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:21:30 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:21:30 UTC - INFO - Current time (UTC): 2025-09-07T19:21:30.993045+00:00
+2025-09-07 19:21:30 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:21:30 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:21:30 UTC - INFO - Minutes since midnight UTC: 1161.52
+2025-09-07 19:21:30 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:21:30 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:21:30 UTC - INFO - Time since last run: 3:29:17.754876
+2025-09-07 19:21:30 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 30m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:22:21 UTC - INFO - ================================================================================
+2025-09-07 19:22:21 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:22:21 UTC - INFO - ================================================================================
+2025-09-07 19:22:21 UTC - INFO - Execution started at: 2025-09-07T19:22:21.132083+00:00
+2025-09-07 19:22:21 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:22:21 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:22:21 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:22:21 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:21 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:22:21 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:21 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:22:21 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:22:21 UTC - INFO - Current time (UTC): 2025-09-07T19:22:21.139670+00:00
+2025-09-07 19:22:21 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:22:21 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:22:21 UTC - INFO - Minutes since midnight UTC: 1162.35
+2025-09-07 19:22:21 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:22:21 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:22:21 UTC - INFO - Time since last run: 3:30:07.901501
+2025-09-07 19:22:21 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 29m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:22:28 UTC - INFO - ================================================================================
+2025-09-07 19:22:28 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:22:28 UTC - INFO - ================================================================================
+2025-09-07 19:22:28 UTC - INFO - Execution started at: 2025-09-07T19:22:28.714245+00:00
+2025-09-07 19:22:28 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:22:28 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:22:28 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:22:28 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:28 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:22:28 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:28 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:22:28 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:22:28 UTC - INFO - Current time (UTC): 2025-09-07T19:22:28.721080+00:00
+2025-09-07 19:22:28 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:22:28 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:22:28 UTC - INFO - Minutes since midnight UTC: 1162.48
+2025-09-07 19:22:28 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:22:28 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:22:28 UTC - INFO - Time since last run: 3:30:15.482911
+2025-09-07 19:22:28 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 29m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:22:36 UTC - INFO - ================================================================================
+2025-09-07 19:22:36 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:22:36 UTC - INFO - ================================================================================
+2025-09-07 19:22:36 UTC - INFO - Execution started at: 2025-09-07T19:22:36.183767+00:00
+2025-09-07 19:22:36 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:22:36 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:22:36 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:22:36 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:36 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:22:36 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:36 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:22:36 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:22:36 UTC - INFO - Current time (UTC): 2025-09-07T19:22:36.191107+00:00
+2025-09-07 19:22:36 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:22:36 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:22:36 UTC - INFO - Minutes since midnight UTC: 1162.60
+2025-09-07 19:22:36 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:22:36 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:22:36 UTC - INFO - Time since last run: 3:30:22.952938
+2025-09-07 19:22:36 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 29m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:22:51 UTC - INFO - ================================================================================
+2025-09-07 19:22:51 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:22:51 UTC - INFO - ================================================================================
+2025-09-07 19:22:51 UTC - INFO - Execution started at: 2025-09-07T19:22:51.184360+00:00
+2025-09-07 19:22:51 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:22:51 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:22:51 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:22:51 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:51 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:22:51 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:22:51 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:22:51 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:22:51 UTC - INFO - Current time (UTC): 2025-09-07T19:22:51.190794+00:00
+2025-09-07 19:22:51 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:22:51 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:22:51 UTC - INFO - Minutes since midnight UTC: 1162.85
+2025-09-07 19:22:51 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:22:51 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:22:51 UTC - INFO - Time since last run: 3:30:37.952625
+2025-09-07 19:22:51 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 29m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:23:06 UTC - INFO - ================================================================================
+2025-09-07 19:23:06 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:23:06 UTC - INFO - ================================================================================
+2025-09-07 19:23:06 UTC - INFO - Execution started at: 2025-09-07T19:23:06.183066+00:00
+2025-09-07 19:23:06 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:23:06 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:23:06 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:23:06 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:06 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:23:06 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:06 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:23:06 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:23:06 UTC - INFO - Current time (UTC): 2025-09-07T19:23:06.189578+00:00
+2025-09-07 19:23:06 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:23:06 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:23:06 UTC - INFO - Minutes since midnight UTC: 1163.10
+2025-09-07 19:23:06 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:23:06 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:23:06 UTC - INFO - Time since last run: 3:30:52.951409
+2025-09-07 19:23:06 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 29m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:23:21 UTC - INFO - ================================================================================
+2025-09-07 19:23:21 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:23:21 UTC - INFO - ================================================================================
+2025-09-07 19:23:21 UTC - INFO - Execution started at: 2025-09-07T19:23:21.185118+00:00
+2025-09-07 19:23:21 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:23:21 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:23:21 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:23:21 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:21 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:23:21 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:21 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:23:21 UTC - INFO - Last run time (UTC): 2025-09-07T15:52:13.238169+00:00
+2025-09-07 19:23:21 UTC - INFO - Current time (UTC): 2025-09-07T19:23:21.192218+00:00
+2025-09-07 19:23:21 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:23:21 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:23:21 UTC - INFO - Minutes since midnight UTC: 1163.35
+2025-09-07 19:23:21 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:23:21 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:23:21 UTC - INFO - Time since last run: 3:31:07.954049
+2025-09-07 19:23:21 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 20h 28m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:23:59 UTC - INFO - ================================================================================
+2025-09-07 19:23:59 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:23:59 UTC - INFO - ================================================================================
+2025-09-07 19:23:59 UTC - INFO - Execution started at: 2025-09-07T19:23:59.572897+00:00
+2025-09-07 19:23:59 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:23:59 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:23:59 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:23:59 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:59 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:23:59 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:59 UTC - INFO - No lock file found, proceeding with first execution.
+2025-09-07 19:23:59 UTC - INFO - Starting Avellaneda parameter calculation...
+2025-09-07 19:23:59 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:59 UTC - INFO - Changing working directory from /freqtrade to /freqtrade/scripts
+2025-09-07 19:23:59 UTC - INFO - Executing command: /usr/local/bin/python3.13 /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:23:59 UTC - INFO - Timeout set to: 3600 seconds
+2025-09-07 19:24:57 UTC - INFO - Subprocess completed with return code: 0
+2025-09-07 19:24:57 UTC - INFO - --------------------------------------------------------------------------------
+2025-09-07 19:24:57 UTC - INFO - CALCULATION SCRIPT STDOUT:
+2025-09-07 19:24:57 UTC - INFO - --------------------------------------------------------------------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: /freqtrade/HL_data_collector/HL_data
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: DOING: BTC
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Loading data for ticker: BTC
+2025-09-07 19:24:57 UTC - INFO - STDOUT:          timestamp_bid  price_bid  ...  exchange_timestamp_ask mid_price
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0         1.756708e+09   107947.0  ...           1756707630446  107947.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 1         1.756708e+09   107947.0  ...           1756707630499  107947.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2         1.756708e+09   107947.0  ...           1756707630648  107947.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 3         1.756708e+09   107947.0  ...           1756707630899  107947.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 4         1.756708e+09   107947.0  ...           1756707631061  107947.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: ...                ...        ...  ...                     ...       ...
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2744402   1.757273e+09   111028.0  ...           1757273038430  111028.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2744403   1.757273e+09   111028.0  ...           1757273038760  111028.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2744404   1.757273e+09   111028.0  ...           1757273038893  111028.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2744405   1.757273e+09   111028.0  ...           1757273039077  111028.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2744406   1.757273e+09   111028.0  ...           1757273039238  111028.5
+2025-09-07 19:24:57 UTC - INFO - STDOUT: [2744407 rows x 12 columns]
+2025-09-07 19:24:57 UTC - INFO - STDOUT:                      mid_price  price_bid  price_ask
+2025-09-07 19:24:57 UTC - INFO - STDOUT: datetime                                            
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-01 06:20:31        NaN        NaN        NaN
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-01 06:20:32   107949.5   107949.0   107950.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-01 06:20:33   107949.5   107949.0   107950.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-01 06:20:34   107949.5   107949.0   107950.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-01 06:20:35   107940.5   107940.0   107941.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: ...                        ...        ...        ...
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-07 19:23:55   111028.5   111028.0   111029.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-07 19:23:56   111028.5   111028.0   111029.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-07 19:23:57   111028.5   111028.0   111029.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-07 19:23:58   111028.5   111028.0   111029.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-07 19:23:59   111028.5   111028.0   111029.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: [565409 rows x 3 columns]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: [Timestamp('2025-09-01 00:00:00'), Timestamp('2025-09-02 00:00:00'), Timestamp('2025-09-03 00:00:00'), Timestamp('2025-09-04 00:00:00'), Timestamp('2025-09-05 00:00:00'), Timestamp('2025-09-06 00:00:00')]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 565409
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 6
+2025-09-07 19:24:57 UTC - INFO - STDOUT: sigma_list: [0.012472801155874071, 0.01323514718481276, 0.011628140236440923, 0.01134446093751099, 0.01089401737363052, 0.009996045006797022]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: len(sigma_list): 6
+2025-09-07 19:24:57 UTC - INFO - STDOUT: [ 1.  2.  3.  4.  5.  6.  7.  8.  9. 10. 11. 12. 13. 14. 15. 16. 17. 18.
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  19. 20. 21. 22. 23. 24. 25. 26. 27. 28. 29. 30. 31. 32. 33. 34. 35. 36.
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  37. 38. 39. 40. 41. 42. 43. 44. 45. 46. 47. 48. 49.]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing 6 days
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Alist: [np.float64(2.051309480813), np.float64(2.001839299007988), np.float64(0.8597206802851386), np.float64(1.4534642528406698), np.float64(0.23339207514060842), np.float64(0.7753954471190315)]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: klist: [np.float64(0.002202717114872374), np.float64(0.00034940909526225773), np.float64(0.0021638911284140062), np.float64(0.0014825454556835417), np.float64(0.0020132559975172826), np.float64(0.0005754558211442337)]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: [0.01       0.01240647 0.01539204 0.01909608 0.02369148 0.02939276
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  0.03646602 0.04524144 0.05612864 0.0696358  0.08639341 0.10718369
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  0.13297707 0.16497754 0.20467882 0.25393406 0.31504241 0.39085628
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  0.48491448 0.60160747 0.74638221 0.9259965  1.14883434 1.42529734
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  1.76829019 2.19382309 2.72175899 3.37674084 4.1893418  5.19749235
+2025-09-07 19:24:57 UTC - INFO - STDOUT:  6.44825083 8.        ]
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2025-09-06
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.01 (1/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: nan
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: nan
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.012406465268703162 (2/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: nan
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: nan
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.015392038046353786 (3/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 2205620.0176181495
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 10.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.007754163078155633
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.007754163078155633
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.01909607854366459 (4/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 2205449.2805235833
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 10.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.007754162905941295
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.007754162905941295
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.023691483522040258 (5/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 4138.969976017906
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.00014125636602576528
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.00014125636602576528
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.029392756748024572 (6/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 2214899.901973632
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 10.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.007644356673353579
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.007644356673353579
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.03646602157458074 (7/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 6624728.869295187
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 30.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.010543628153085995
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.010543628153085995
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.04524144301528164 (8/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -1414.416501529122
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 0.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.004406017215398755
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.004406017215398755
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.0561286391475105 (9/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 2197748.3900912222
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 10.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.002900694392878026
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.002900694392878026
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.06963580121631617 (10/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: 2190112.825613267
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: 10.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0035379555291901433
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0035379555291901433
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.0863934149248544 (11/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -8847105.83206232
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -40.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.00569738864668752
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.00569738864668752
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.10718369017098676 (12/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -19897216.86619568
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -90.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.01292927294069833
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.01292927294069833
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.1329770729477788 (13/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -24323715.28627045
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -110.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.003991983900996212
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.003991983900996212
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.16497754370604245 (14/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -42014907.148958325
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -190.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.015161724784776932
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.015161724784776932
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.2046788166104975 (15/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -44178629.60317933
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -200.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: 0.002611510349151829
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: 0.002611510349151829
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.25393406295174015 (16/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -72923748.14143056
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -330.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0042678777383608315
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0042678777383608315
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.31504241325514465 (17/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -99480032.6064739
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -450.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.01653267166300268
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.01653267166300268
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.39085627582183813 (18/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -145930507.607535
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -660.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.017568526165600933
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.017568526165600933
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.48491448110382984 (19/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -104011144.51457757
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -470.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.015588124213932242
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.015588124213932242
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.6016074668105884 (20/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -216617411.91226244
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -980.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.005042051173587084
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.005042051173587084
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.7463822142378056 (21/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -176908251.9637395
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -800.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.005047859440853775
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.005047859440853775
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 0.92599650181191 (22/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -232100979.5377215
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -1050.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.003392304492674638
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.003392304492674638
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 1.1488343438670086 (23/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -413196604.0793464
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -1870.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.005635568957366173
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.005635568957366173
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 1.4252973386679428 (24/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -466245922.7106638
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -2110.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.006066755008398328
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.006066755008398328
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 1.7682901929758883 (25/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -382368572.52847767
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -1730.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.005599265054258459
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.005599265054258459
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 2.1938230864143775 (26/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -380175493.86914206
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -1720.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.005424298348278112
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.005424298348278112
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 2.721758992727915 (27/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -514799168.93130183
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -2330.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0054385561789917275
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0054385561789917275
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 3.3767408413059417 (28/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -497170454.46200585
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -2250.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0038052274312796535
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0038052274312796535
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 4.1893417969073665 (29/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -649474798.6541921
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -2940.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0038094489137866974
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0038094489137866974
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 5.197492350205774 (30/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -720150407.5382743
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -3260.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0037952575995049034
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0037952575995049034
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 6.448250832717832 (31/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -962804293.9690205
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -4360.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.0030545475155734207
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.0030545475155734207
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Doing gamma: 7.999999999999999 (32/32)
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: final_pnl: -10993027385.791714
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Final inventory: -49825.0
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Sharpe: -0.003077968252754622
+2025-09-07 19:24:57 UTC - INFO - STDOUT: score: -0.003077968252754622
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Index([0.01539,  0.0191, 0.02369, 0.02939, 0.03647, 0.04524, 0.05613, 0.06964,
+2025-09-07 19:24:57 UTC - INFO - STDOUT:        0.08639, 0.10718, 0.13298, 0.16498, 0.20468, 0.25393, 0.31504, 0.39086,
+2025-09-07 19:24:57 UTC - INFO - STDOUT:        0.48491, 0.60161, 0.74638,   0.926, 1.14883,  1.4253, 1.76829, 2.19382,
+2025-09-07 19:24:57 UTC - INFO - STDOUT:        2.72176, 3.37674, 4.18934, 5.19749, 6.44825,     8.0],
+2025-09-07 19:24:57 UTC - INFO - STDOUT:       dtype='float64', name='gamma')
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT:             score
+2025-09-07 19:24:57 UTC - INFO - STDOUT: gamma            
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.01539  0.007754
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.01910  0.007754
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.02369 -0.000141
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.02939  0.007644
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.03647  0.010544
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.04524  0.004406
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.05613 -0.002901
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.06964 -0.003538
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.08639 -0.005697
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.10718 -0.012929
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.13298 -0.003992
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.16498 -0.015162
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.20468  0.002612
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.25393 -0.004268
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.31504 -0.016533
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.39086 -0.017569
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.48491 -0.015588
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.60161 -0.005042
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.74638 -0.005048
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.92600 -0.003392
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 1.14883 -0.005636
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 1.42530 -0.006067
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 1.76829 -0.005599
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2.19382 -0.005424
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 2.72176 -0.005439
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 3.37674 -0.003805
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 4.18934 -0.003809
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 5.19749 -0.003795
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 6.44825 -0.003055
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 8.00000 -0.003078
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: best gamma: 0.03647
+2025-09-07 19:24:57 UTC - INFO - STDOUT: best score: 0.010543628153085995
+2025-09-07 19:24:57 UTC - INFO - STDOUT: --------------------
+2025-09-07 19:24:57 UTC - INFO - STDOUT: 0.08008989797227409
+2025-09-07 19:24:57 UTC - INFO - STDOUT: ================================================================================
+2025-09-07 19:24:57 UTC - INFO - STDOUT: AVELLANEDA-STOIKOV MARKET MAKING PARAMETERS - BTC
+2025-09-07 19:24:57 UTC - INFO - STDOUT: ================================================================================
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Market Data:
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Mid Price:                        $111,028.5000
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Volatility (sigma):               0.010894
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Intensity (A):                    0.7754
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Order arrival rate decay (k):     0.002013
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Optimal Parameters:
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Risk Aversion (gamma): 0.036470
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Current State:
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Time Remaining:        0.1667
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Inventory (q):         111028.5000
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Calculated Prices:
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Mid Price:             $111028.5000
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Reservation Price:     $111028.4199
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Ask Price:             $111109.2411
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Bid Price:             $110947.4385
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Spreads:
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Delta Ask:             $80.821197 (0.072793%)
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Delta Bid:             $80.981377 (0.072937%)
+2025-09-07 19:24:57 UTC - INFO - STDOUT:    Total Spread:          0.1457%
+2025-09-07 19:24:57 UTC - INFO - STDOUT: Results saved to: avellaneda_parameters_BTC.json
+2025-09-07 19:24:57 UTC - INFO - STDOUT: ================================================================================
+2025-09-07 19:24:57 UTC - INFO - --------------------------------------------------------------------------------
+2025-09-07 19:24:57 UTC - INFO - CALCULATION SCRIPT STDERR:
+2025-09-07 19:24:57 UTC - INFO - --------------------------------------------------------------------------------
+2025-09-07 19:24:57 UTC - INFO - STDERR: /freqtrade/scripts/calculate_avellaneda_parameters.py:191: RuntimeWarning: overflow encountered in exp
+2025-09-07 19:24:57 UTC - INFO - STDERR:   y = a*np.exp(-b*x)
+2025-09-07 19:24:57 UTC - INFO - STDERR: /freqtrade/scripts/calculate_avellaneda_parameters.py:191: RuntimeWarning: overflow encountered in exp
+2025-09-07 19:24:57 UTC - INFO - STDERR:   y = a*np.exp(-b*x)
+2025-09-07 19:24:57 UTC - INFO - STDERR: /freqtrade/scripts/calculate_avellaneda_parameters.py:191: RuntimeWarning: overflow encountered in multiply
+2025-09-07 19:24:57 UTC - INFO - STDERR:   y = a*np.exp(-b*x)
+2025-09-07 19:24:57 UTC - INFO - Updating lock file: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:24:57 UTC - INFO - SUCCESS: Avellaneda parameter calculation completed successfully
+2025-09-07 19:24:57 UTC - INFO - Restoring working directory to: /freqtrade
+2025-09-07 19:25:05 UTC - INFO - ================================================================================
+2025-09-07 19:25:05 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:25:05 UTC - INFO - ================================================================================
+2025-09-07 19:25:05 UTC - INFO - Execution started at: 2025-09-07T19:25:05.128792+00:00
+2025-09-07 19:25:05 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:25:05 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:25:05 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:25:05 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:05 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:25:05 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:05 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:25:05 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:25:05 UTC - INFO - Current time (UTC): 2025-09-07T19:25:05.136974+00:00
+2025-09-07 19:25:05 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:25:05 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:25:05 UTC - INFO - Minutes since midnight UTC: 1165.09
+2025-09-07 19:25:05 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:25:05 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:25:05 UTC - INFO - Time since last run: 0:00:07.579366
+2025-09-07 19:25:05 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 59m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:25:17 UTC - INFO - ================================================================================
+2025-09-07 19:25:17 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:25:17 UTC - INFO - ================================================================================
+2025-09-07 19:25:17 UTC - INFO - Execution started at: 2025-09-07T19:25:17.175658+00:00
+2025-09-07 19:25:17 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:25:17 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:25:17 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:25:17 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:17 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:25:17 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:17 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:25:17 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:25:17 UTC - INFO - Current time (UTC): 2025-09-07T19:25:17.184350+00:00
+2025-09-07 19:25:17 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:25:17 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:25:17 UTC - INFO - Minutes since midnight UTC: 1165.29
+2025-09-07 19:25:17 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:25:17 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:25:17 UTC - INFO - Time since last run: 0:00:19.626742
+2025-09-07 19:25:17 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 59m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:25:29 UTC - INFO - ================================================================================
+2025-09-07 19:25:29 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:25:29 UTC - INFO - ================================================================================
+2025-09-07 19:25:29 UTC - INFO - Execution started at: 2025-09-07T19:25:29.488643+00:00
+2025-09-07 19:25:29 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:25:29 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:25:29 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:25:29 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:29 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:25:29 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:29 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:25:29 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:25:29 UTC - INFO - Current time (UTC): 2025-09-07T19:25:29.496578+00:00
+2025-09-07 19:25:29 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:25:29 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:25:29 UTC - INFO - Minutes since midnight UTC: 1165.49
+2025-09-07 19:25:29 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:25:29 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:25:29 UTC - INFO - Time since last run: 0:00:31.938970
+2025-09-07 19:25:29 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 59m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:25:44 UTC - INFO - ================================================================================
+2025-09-07 19:25:44 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:25:44 UTC - INFO - ================================================================================
+2025-09-07 19:25:44 UTC - INFO - Execution started at: 2025-09-07T19:25:44.496700+00:00
+2025-09-07 19:25:44 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:25:44 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:25:44 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:25:44 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:44 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:25:44 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:44 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:25:44 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:25:44 UTC - INFO - Current time (UTC): 2025-09-07T19:25:44.505280+00:00
+2025-09-07 19:25:44 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:25:44 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:25:44 UTC - INFO - Minutes since midnight UTC: 1165.74
+2025-09-07 19:25:44 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:25:44 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:25:44 UTC - INFO - Time since last run: 0:00:46.947672
+2025-09-07 19:25:44 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 59m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:25:59 UTC - INFO - ================================================================================
+2025-09-07 19:25:59 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:25:59 UTC - INFO - ================================================================================
+2025-09-07 19:25:59 UTC - INFO - Execution started at: 2025-09-07T19:25:59.489363+00:00
+2025-09-07 19:25:59 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:25:59 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:25:59 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:25:59 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:59 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:25:59 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:25:59 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:25:59 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:25:59 UTC - INFO - Current time (UTC): 2025-09-07T19:25:59.497580+00:00
+2025-09-07 19:25:59 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:25:59 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:25:59 UTC - INFO - Minutes since midnight UTC: 1165.99
+2025-09-07 19:25:59 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:25:59 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:25:59 UTC - INFO - Time since last run: 0:01:01.939972
+2025-09-07 19:25:59 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 58m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:26:40 UTC - INFO - ================================================================================
+2025-09-07 19:26:40 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:26:40 UTC - INFO - ================================================================================
+2025-09-07 19:26:40 UTC - INFO - Execution started at: 2025-09-07T19:26:40.889563+00:00
+2025-09-07 19:26:40 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:26:40 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:26:40 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:26:40 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:26:40 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:26:40 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:26:40 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:26:40 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:26:40 UTC - INFO - Current time (UTC): 2025-09-07T19:26:40.897152+00:00
+2025-09-07 19:26:40 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:26:40 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:26:40 UTC - INFO - Minutes since midnight UTC: 1166.68
+2025-09-07 19:26:40 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:26:40 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:26:40 UTC - INFO - Time since last run: 0:01:43.339544
+2025-09-07 19:26:40 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 58m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:26:48 UTC - INFO - ================================================================================
+2025-09-07 19:26:48 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:26:48 UTC - INFO - ================================================================================
+2025-09-07 19:26:48 UTC - INFO - Execution started at: 2025-09-07T19:26:48.452531+00:00
+2025-09-07 19:26:48 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:26:48 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:26:48 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:26:48 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:26:48 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:26:48 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:26:48 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:26:48 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:26:48 UTC - INFO - Current time (UTC): 2025-09-07T19:26:48.461150+00:00
+2025-09-07 19:26:48 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:26:48 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:26:48 UTC - INFO - Minutes since midnight UTC: 1166.81
+2025-09-07 19:26:48 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:26:48 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:26:48 UTC - INFO - Time since last run: 0:01:50.903542
+2025-09-07 19:26:48 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 58m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:28:49 UTC - INFO - ================================================================================
+2025-09-07 19:28:49 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:28:49 UTC - INFO - ================================================================================
+2025-09-07 19:28:49 UTC - INFO - Execution started at: 2025-09-07T19:28:49.990461+00:00
+2025-09-07 19:28:49 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:28:49 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:28:49 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:28:49 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:28:49 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:28:49 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:28:49 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:28:49 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:28:49 UTC - INFO - Current time (UTC): 2025-09-07T19:28:49.997463+00:00
+2025-09-07 19:28:49 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:28:49 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:28:49 UTC - INFO - Minutes since midnight UTC: 1168.83
+2025-09-07 19:28:50 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:28:50 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:28:50 UTC - INFO - Time since last run: 0:03:52.439855
+2025-09-07 19:28:50 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 56m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:28:57 UTC - INFO - ================================================================================
+2025-09-07 19:28:57 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:28:57 UTC - INFO - ================================================================================
+2025-09-07 19:28:57 UTC - INFO - Execution started at: 2025-09-07T19:28:57.510251+00:00
+2025-09-07 19:28:57 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:28:57 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:28:57 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:28:57 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:28:57 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:28:57 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:28:57 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:28:57 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:28:57 UTC - INFO - Current time (UTC): 2025-09-07T19:28:57.518002+00:00
+2025-09-07 19:28:57 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:28:57 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:28:57 UTC - INFO - Minutes since midnight UTC: 1168.96
+2025-09-07 19:28:57 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:28:57 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:28:57 UTC - INFO - Time since last run: 0:03:59.960394
+2025-09-07 19:28:57 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 56m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:31:24 UTC - INFO - ================================================================================
+2025-09-07 19:31:24 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:31:24 UTC - INFO - ================================================================================
+2025-09-07 19:31:24 UTC - INFO - Execution started at: 2025-09-07T19:31:24.830775+00:00
+2025-09-07 19:31:24 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:31:24 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:31:24 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:31:24 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:31:24 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:31:24 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:31:24 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:31:24 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:31:24 UTC - INFO - Current time (UTC): 2025-09-07T19:31:24.838338+00:00
+2025-09-07 19:31:24 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:31:24 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:31:24 UTC - INFO - Minutes since midnight UTC: 1171.41
+2025-09-07 19:31:24 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:31:24 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:31:24 UTC - INFO - Time since last run: 0:06:27.280730
+2025-09-07 19:31:24 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 53m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.
+2025-09-07 19:33:54 UTC - INFO - ================================================================================
+2025-09-07 19:33:54 UTC - INFO -                 AVELLANEDA PARAMETER CALCULATION RUNNER - START                 
+2025-09-07 19:33:54 UTC - INFO - ================================================================================
+2025-09-07 19:33:54 UTC - INFO - Execution started at: 2025-09-07T19:33:54.831729+00:00
+2025-09-07 19:33:54 UTC - INFO - Log file location: /freqtrade/user_data/strategies/avellaneda_runner.log
+2025-09-07 19:33:54 UTC - INFO - Current directory: /freqtrade/user_data/strategies
+2025-09-07 19:33:54 UTC - INFO - Project root: /freqtrade
+2025-09-07 19:33:54 UTC - INFO - Script path: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:33:54 UTC - INFO - Lock file path: /freqtrade/user_data/strategies/.avellaneda_last_run.json
+2025-09-07 19:33:54 UTC - INFO - Calculation script found: /freqtrade/scripts/calculate_avellaneda_parameters.py
+2025-09-07 19:33:54 UTC - INFO - Lock file exists, checking previous execution time...
+2025-09-07 19:33:54 UTC - INFO - Last run time (UTC): 2025-09-07T19:24:57.557608+00:00
+2025-09-07 19:33:54 UTC - INFO - Current time (UTC): 2025-09-07T19:33:54.838828+00:00
+2025-09-07 19:33:54 UTC - INFO - Current UTC date: 2025-09-07
+2025-09-07 19:33:54 UTC - INFO - Last run UTC date: 2025-09-07
+2025-09-07 19:33:54 UTC - INFO - Minutes since midnight UTC: 1173.91
+2025-09-07 19:33:54 UTC - INFO - Is new day with grace period (>5min): False
+2025-09-07 19:33:54 UTC - INFO - Is new day at 3AM (>180min): False
+2025-09-07 19:33:54 UTC - INFO - Time since last run: 0:08:57.281220
+2025-09-07 19:33:54 UTC - INFO - EXECUTION SKIPPED: Calculation already performed within the last 24 hours. Time remaining: 23h 51m. Will also run on new UTC day after 5-minute grace period or at 03:00 UTC.

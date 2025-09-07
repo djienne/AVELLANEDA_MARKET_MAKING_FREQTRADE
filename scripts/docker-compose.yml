@@ -1,0 +1,30 @@
+version: "3.9"
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.20.0/22
+services:
+  hl-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hl-collector
+    environment:
+      # Comma-separated symbols; defaults match your script
+      SYMBOLS: ${SYMBOLS:-BTC,ETH,SOL,WLFI}
+      OUTPUT_DIR: ${OUTPUT_DIR:-HL_data}
+      ORDERBOOK_DEPTH: ${ORDERBOOK_DEPTH:-20}
+      TZ: ${TZ:-UTC}
+    volumes:
+      # Persist data on the host; aligns with OUTPUT_DIR default
+      - ./HL_data:/app/HL_data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: ["python", "run_collector.py"]
+
