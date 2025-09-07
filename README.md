@@ -50,7 +50,6 @@ ADVANCED_MM/
 ├── scripts/
 │   ├── calculate_avellaneda_parameters.py # Unified parameter calculation
 │   ├── avellaneda_parameters_BTC.json # Current model parameters (BTC)
-│   ├── avellaneda_parameters_ETH.json # Current model parameters (ETH)
 │   ├── Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook with most of what was implemented, with some changes
 │   ├── requirements.txt              # Python dependencies
 │   └── docker-compose.yml            # Container config for scripts
@@ -176,6 +175,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
