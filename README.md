@@ -1,6 +1,6 @@
 # Advanced Market Making with Freqtrade
 
-A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization.
+A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid.
 
 ## Overview
 
@@ -247,6 +247,7 @@ This software is for educational and research purposes. Market making involves s
 ONLY USE IN DRY-RUN
 
 ## License
+
 
 
 This project implements academic market making models and is intended for research and educational use.
