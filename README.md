@@ -142,7 +142,7 @@ There is one {`σ`, `κ`, `γ`} set calculated and used per day.
 ### avellaneda.py
 
 The main Freqtrade strategy implementing the Avellaneda-Stoikov model:
-- **Dynamic spread calculation** using γ, κ, σ parameters
+- **Dynamic spread calculation** using {σ, κ, γ} parameters
 - **Inventory-aware pricing** with asymmetric bid-ask spreads
 - **Real-time parameter loading** from `avellaneda_parameters_BTC.json`
 - **Automated parameter recalculation** through integrated runner
@@ -162,6 +162,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
