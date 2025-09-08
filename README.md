@@ -26,11 +26,6 @@ This project implements an advanced market making strategy that:
 - **Trade flow analysis** for order arrival intensity estimation
 - **Volatility estimation** from recent price movements
 
-### 🔄 Automated Parameter Optimization
-- **Real-time parameter calculation** using recent market data windows
-- **Statistical analysis** of price movements and order flow
-- **Automatic strategy recalibration** based on current market conditions
-
 ### 🏗️ Modular Architecture
 - **Core strategy**: `avellaneda.py` - Main Avellaneda-Stoikov Freqtrade strategy implementation
 - **Parameter calculation**: `calculate_avellaneda_parameters.py` - Unified parameter estimation
@@ -124,6 +119,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
