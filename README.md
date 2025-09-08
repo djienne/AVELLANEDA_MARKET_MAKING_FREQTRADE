@@ -146,13 +146,12 @@ The main Freqtrade strategy implementing the Avellaneda-Stoikov model:
 - **Inventory-aware pricing** with asymmetric bid-ask spreads
 - **Real-time parameter loading** from `avellaneda_parameters_BTC.json`
 - **Automated parameter recalculation** through integrated runner
-- **Risk management** with inventory-based spread adjustments
 
 ### Parameter Calculation Scripts
 
 - **calculate_avellaneda_parameters.py**: Unified parameter estimation for {`σ`, `κ`, `γ`}
-- **run_avellaneda_param_calculation.py**: Strategy-integrated parameter updates
-- **Research notebook**: Francesco_Mangia_Avellaneda_BTC.ipynb (parameter analysis and research)
+- **run_avellaneda_param_calculation.py**: Strategy-integrated regular parameter updates (daily)
+- **Reference notebook**: Francesco_Mangia_Avellaneda_BTC.ipynb (used as a basis, but several changes)
 
 ## Disclaimer
 
@@ -162,6 +161,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
