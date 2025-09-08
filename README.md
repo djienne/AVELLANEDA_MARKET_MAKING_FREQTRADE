@@ -90,6 +90,15 @@ Where:
 * $\sigma$, the volatility of the asset
 * $q$, the number of assets held in inventory
 
+$$
+\boxed{%
+\begin{aligned}
+p_{\text{bid}}(t) &= S_t - q\gamma\sigma^{2}(T-t)\;-\;\left(\frac{1}{\gamma}\ln\!\Bigl(1+\frac{\gamma}{k}\Bigr)+\tfrac{1}{2}\gamma\sigma^{2}(T-t)\right),\\[6pt]
+p_{\text{ask}}(t) &= S_t - q\gamma\sigma^{2}(T-t)\;+\;\left(\frac{1}{\gamma}\ln\!\Bigl(1+\frac{\gamma}{k}\Bigr)+\tfrac{1}{2}\gamma\sigma^{2}(T-t)\right).
+\end{aligned}
+}
+$$
+
 ### Parameter Estimation and Calibration
 
 **Gamma (γ) - Risk Aversion:**
@@ -139,6 +148,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
