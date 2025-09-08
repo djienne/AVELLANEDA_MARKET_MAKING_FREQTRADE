@@ -130,7 +130,7 @@ $$
 
 **Kappa (κ) Parameter - Order Flow Intensity:**
 - Estimated from order book data: `λ(δ) = A e^(-κ δ)`
-- Fitted using regression on historical order arrival rates vs spread
+- Fitted using fit on historical order list and bid-ask spreads
 
 **Sigma (σ) - Volatility:**
 - Estimated from recent price returns using rolling windows
@@ -163,6 +163,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
