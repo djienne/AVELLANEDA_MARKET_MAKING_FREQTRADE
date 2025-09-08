@@ -89,7 +89,7 @@ Where:
 * $s$ the mid-price of the asset
 * $\sigma$, the volatility of the asset
 * $k$, the intensity of the arrival of orders
-* $\gamma$, a risk factor that is adjusted with the best backtest
+* $\gamma$, a risk factor that is adjusted with the best backtest (maximum sharpe ratio)
 * $T$, the end of the time series, (T - t) here is between 0 and 1 and is the fractional number of days left before the end of day.
 * $q$, the number of assets held in inventory
 
@@ -127,6 +127,7 @@ $$
 **Gamma (γ) - Risk Aversion:**
 - Controls the trade-off between profit and inventory risk
 - Higher γ → tighter spreads around zero inventory
+- Estimated with best daily backtest, i.e. with best sharpe ratio
 
 **K Parameter - Order Flow Intensity:**
 - Estimated from order book data: `λ(δ) = A e^(-k δ)`
@@ -135,6 +136,8 @@ $$
 **Sigma (σ) - Volatility:**
 - Estimated from recent price returns using rolling windows
 - Used for both spread calculation and risk assessment
+
+There is one {`σ`, `k`, `γ`} set used per day.
 
 ## Key Components
 
@@ -153,16 +156,6 @@ The main strategy implementing the Avellaneda-Stoikov model:
 - **run_avellaneda_param_calculation.py**: Strategy-integrated parameter updates
 - **Research notebook**: Francesco_Mangia_Avellaneda_BTC.ipynb (parameter analysis and research)
 
-## Risk Management
-
-### Built-in Protections
-
-- **Inventory-based spread adjustment**: Wider spreads for larger positions
-- **Position limits**: Single position with $20 USDC stake size
-- **Order timeouts**: 15-second unfilled order cancellation  
-- **Risk aversion parameter**: γ controls inventory penalty strength
-- **Dry-run only**: Currently configured for paper trading
-
 ## Disclaimer
 
 This software is for educational and research purposes. Market making involves significant financial risk. Always test thoroughly in dry-run mode before deploying with real capital. Past performance does not guarantee future results.
@@ -171,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
