@@ -150,7 +150,7 @@ The main Freqtrade strategy implementing the Avellaneda-Stoikov model:
 
 ### Parameter Calculation Scripts
 
-- **calculate_avellaneda_parameters.py**: Unified parameter estimation for γ, κ, σ
+- **calculate_avellaneda_parameters.py**: Unified parameter estimation for {σ, κ, γ}
 - **run_avellaneda_param_calculation.py**: Strategy-integrated parameter updates
 - **Research notebook**: Francesco_Mangia_Avellaneda_BTC.ipynb (parameter analysis and research)
 
@@ -162,6 +162,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
