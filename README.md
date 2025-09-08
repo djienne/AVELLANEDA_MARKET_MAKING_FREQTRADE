@@ -10,6 +10,7 @@ This project implements an advanced market making strategy that:
 
 - **Dynamically calculates optimal bid-ask spreads** using the Avellaneda-Stoikov market making model.
 - **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `k`, `γ`). Once a day, parameters calculated from data of day N-1 is used for day N.
+- **Uses Freqtrade**
 - **Uses Hyperliquid exchange**
 
 ## Key Features
@@ -123,6 +124,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
