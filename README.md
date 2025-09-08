@@ -127,7 +127,7 @@ $$
 **Gamma (γ) - Risk Aversion:**
 - Controls the trade-off between profit and inventory risk
 - Higher γ → tighter spreads around zero inventory
-- Estimated with best daily backtest, i.e. with best sharpe ratio
+- Estimated with best daily backtest, i.e. with maximum sharpe ratio
 
 **K Parameter - Order Flow Intensity:**
 - Estimated from order book data: `λ(δ) = A e^(-k δ)`
@@ -164,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
