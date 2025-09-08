@@ -80,6 +80,10 @@ $$
 \text{reservation price} = r = s - q\gamma\sigma^2(T-t)
 $$
 
+$$
+\text{gap} = |r - s|
+$$
+
 Where:
 
 * $\gamma$, a risk factor that is adjusted to meet the risk/return trade-off of the market maker
@@ -168,6 +172,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
