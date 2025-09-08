@@ -93,6 +93,8 @@ Where:
 * $T$, the end of the time series, (T - t) here is between 0 and 1 and is the fractional number of days left before the end of day.
 * $q$, the number of assets held in inventory
 
+And the final best buy and sell limit order prices:
+
 If $r \geq s$:
 
 $$
@@ -164,6 +166,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
