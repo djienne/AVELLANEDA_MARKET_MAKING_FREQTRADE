@@ -91,18 +91,22 @@ Where:
 * $q$, the number of assets held in inventory
 
 if $r$>=$s$:
+
 $$
-{\delta}_a = spread + gap
-{\delta}_b = spread - gap
+{\delta}_a = \text{spread} + \text{gap}
+{\delta}_b = \text{spread} - \text{gap}
 $$
+
 if $r$<$s$:
+
 $$
-\delta_a = spread - gap
-\delta_b = spread + gap
+{\delta}_a = \text{spread} - \text{gap}
+{\delta}_b = \text{spread} + \text{gap}
 $$
+
 $$
-buy_price = r - \delta_a
-sell_price = r + \delta_a
+\text{buy_price} = r - \delta_a
+\text{sell_price} = r + \delta_a
 $$
 
 
@@ -155,6 +159,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
