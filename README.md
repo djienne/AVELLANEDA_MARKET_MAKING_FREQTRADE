@@ -2,14 +2,14 @@
 
 A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid. It is Long-Only and Ping-Pong for now.
 
-⚠️: Data in `HL_data_collector/HL_data` is a subsample of the real BTC data on Hyperliquid. Due to GitHub limitations, I cannot include the actual data, which is approximately a hundred MB per day. You should collect data yourself for several days before obtaining reliable {`σ`, `k`, `γ`} parameter estimation/calibration. Running `docker-compose build` then `docker-compose up` will start data collection as well as Freqtrade trading with inaccurate {`σ`, `k`, `γ`} parameters for the first couple of days. After running for a couple of days, you can leave it as is or reset the Freqtrade trading by stopping with `docker-compose down`, removing the `tradesv3.sqlite` database, and restarting with `docker-compose up` (`docker-compose up -d` to run as a daemon in the background). Updates {`σ`, `k`, `γ`} parameters every day, once a day.
+⚠️: Data in `HL_data_collector/HL_data` is a subsample of the real BTC data on Hyperliquid. Due to GitHub limitations, I cannot include the actual data, which is approximately a hundred MB per day. You should collect data yourself for several days before obtaining reliable {`σ`, `κ`, `γ`} parameter estimation/calibration. Running `docker-compose build` then `docker-compose up` will start data collection as well as Freqtrade trading with inaccurate {`σ`, `κ`, `γ`} parameters for the first couple of days. After running for a couple of days, you can leave it as is or reset the Freqtrade trading by stopping with `docker-compose down`, removing the `tradesv3.sqlite` database, and restarting with `docker-compose up` (`docker-compose up -d` to run as a daemon in the background). Updates {`σ`, `κ`, `γ`} parameters every day, once a day.
 
 ## Overview
 
 This project implements an advanced market making strategy that:
 
 - **Dynamically calculates optimal bid-ask spreads** using the Avellaneda-Stoikov market making model.
-- **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `k`, `γ`). Once a day, parameters calculated from data of day N-1 is used for trading on day N.
+- **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `κ`, `γ`). Once a day, parameters calculated from data of day N-1 is used for trading on day N.
 - **Uses Freqtrade**
 - **Uses Hyperliquid exchange**
 
@@ -17,7 +17,7 @@ This project implements an advanced market making strategy that:
 
 ### 🎯 Dynamic Spread Calculation
 - **Sigma parameter** (`σ`): Price volatility estimate
-- **K parameter** (`k`): Order flow intensity factor
+- **κ parameter** (`κ`): Order flow intensity factor
 - **Gamma parameter** (`γ`): Risk aversion coefficient
 - **Real-time recalibration** through automated parameter calculation. Updates once a day, parameters calculated from data of day N-1 is used for trading on day N.
 
@@ -71,7 +71,7 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 Avellaneda and Stoikov's paper study the optimal submission strategies of bid and ask orders in a limit order book, "*balancing between the dealer’s personal risk considerations and the market environment*" and defining the bid/ask spread as:
 
 $$
-\text{bid / ask spread} = \text{spread} = \gamma \sigma ^2 (T - t) + \frac{2}{\gamma}\ln\left(1 + \frac{\gamma}{k}\right)
+\text{bid / ask spread} = \text{spread} = \gamma \sigma ^2 (T - t) + \frac{2}{\gamma}\ln\left(1 + \frac{\gamma}{κ}\right)
 $$
 
 This spread is defined around a reservation price i.e. a price at which a market maker is indifferent between their current portfolio and their current portfolio $\pm$ a new share. The reservation price is derived in the whitepaper as follows:
@@ -88,7 +88,7 @@ Where:
 
 * $s$ the mid-price of the asset
 * $\sigma$, the volatility of the asset
-* $k$, the intensity of the arrival of orders
+* $κ$, the intensity of the arrival of orders
 * $\gamma$, a risk factor that is adjusted with the best backtest (maximum sharpe ratio)
 * $T$, the end of the time series, (T - t) here is between 0 and 1 and is the fractional number of days left before the end of day.
 * $q$, the number of assets held in inventory
@@ -164,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
