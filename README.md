@@ -9,7 +9,7 @@ A sophisticated market making system built on Freqtrade, implementing the Avella
 This project implements an advanced market making strategy that:
 
 - **Dynamically calculates optimal bid-ask spreads** using the Avellaneda-Stoikov market making model.
-- **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `κ`, `γ`). Once a day, parameters calculated from data of day N-1 is used for trading on day N.
+- **Continuously adapts to market conditions** through real-time parameter estimation (`σ`, `κ`, `γ`). Once a day, parameters calculated from data of day N-1 are used for trading on day N.
 - **Uses Freqtrade**
 - **Uses Hyperliquid exchange**
 
@@ -19,7 +19,7 @@ This project implements an advanced market making strategy that:
 - **Sigma parameter** (`σ`): Price volatility estimate
 - **κ parameter** (`κ`): Order flow intensity factor
 - **Gamma parameter** (`γ`): Risk aversion coefficient
-- **Real-time recalibration** through automated parameter calculation. Updates once a day, parameters calculated from data of day N-1 is used for trading on day N.
+- **Real-time recalibration** through automated parameter calculation. Updates once a day, parameters calculated from data of day N-1 are used for trading on day N.
 
 ### 📊 Market Data Integration
 - **Order book analysis** for mid-price calculation and spread optimization
@@ -164,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
