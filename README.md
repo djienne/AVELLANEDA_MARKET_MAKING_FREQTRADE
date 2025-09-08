@@ -90,24 +90,27 @@ Where:
 * $\sigma$, the volatility of the asset
 * $q$, the number of assets held in inventory
 
-if $r$>=$s$:
+If $r \geq s$:
 
 $$
-{\delta}_a = \text{spread} + \text{gap}
-{\delta}_b = \text{spread} - \text{gap}
+\delta_a = \text{spread} + \text{gap} \\
+\delta_b = \text{spread} - \text{gap}
 $$
 
-if $r$<$s$:
+If $r < s$:
 
 $$
-{\delta}_a = \text{spread} - \text{gap}
-{\delta}_b = \text{spread} + \text{gap}
+\delta_a = \text{spread} - \text{gap} \\
+\delta_b = \text{spread} + \text{gap}
 $$
 
+Finally:
+
 $$
-\text{buy_price} = r - \delta_a
-\text{sell_price} = r + \delta_a
+\text{buy\_price} = r - \delta_a \\
+\text{sell\_price} = r + \delta_a
 $$
+
 
 
 ### Parameter Estimation and Calibration
@@ -159,6 +162,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
