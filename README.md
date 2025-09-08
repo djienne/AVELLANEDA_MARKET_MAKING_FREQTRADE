@@ -113,8 +113,6 @@ $$
 \end{aligned}
 $$
 
-Finally:
-
 $$
 \begin{aligned}
 \text{buy}_{\text{price}} &= r - \delta_b \\
@@ -166,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
