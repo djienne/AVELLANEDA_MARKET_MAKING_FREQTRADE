@@ -133,8 +133,7 @@ $$
 - Fitted using fit on historical order list and bid-ask spreads
 
 **Sigma (σ) - Volatility:**
-- Estimated from recent price returns using rolling windows
-- Used for both spread calculation and risk assessment
+- Estimated from recent prices using rolling windows
 
 There is one {`σ`, `κ`, `γ`} set used per day.
 
@@ -163,6 +162,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
