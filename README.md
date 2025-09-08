@@ -93,22 +93,28 @@ Where:
 If $r \geq s$:
 
 $$
-\delta_a = \text{spread} + \text{gap} \\
-\delta_b = \text{spread} - \text{gap}
+\begin{aligned}
+\delta_a &= \text{spread} + \text{gap} \\
+\delta_b &= \text{spread} - \text{gap}
+\end{aligned}
 $$
 
 If $r < s$:
 
 $$
-\delta_a = \text{spread} - \text{gap} \\
-\delta_b = \text{spread} + \text{gap}
+\begin{aligned}
+\delta_a &= \text{spread} - \text{gap} \\
+\delta_b &= \text{spread} + \text{gap}
+\end{aligned}
 $$
 
 Finally:
 
 $$
-\text{buy\_price} = r - \delta_a \\
-\text{sell\_price} = r + \delta_a
+\begin{aligned}
+\text{buy\_price} &= r - \delta_a \\
+\text{sell\_price} &= r + \delta_a
+\end{aligned}
 $$
 
 
@@ -162,6 +168,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
