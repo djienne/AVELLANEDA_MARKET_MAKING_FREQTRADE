@@ -129,22 +129,22 @@ $$
 - Higher γ → tighter spreads around zero inventory
 - Estimated with best daily backtest, i.e. with maximum sharpe ratio
 
-**K Parameter - Order Flow Intensity:**
-- Estimated from order book data: `λ(δ) = A e^(-k δ)`
+**Kappa (κ) Parameter - Order Flow Intensity:**
+- Estimated from order book data: `λ(δ) = A e^(-κ δ)`
 - Fitted using regression on historical order arrival rates vs spread
 
 **Sigma (σ) - Volatility:**
 - Estimated from recent price returns using rolling windows
 - Used for both spread calculation and risk assessment
 
-There is one {`σ`, `k`, `γ`} set used per day.
+There is one {`σ`, `κ`, `γ`} set used per day.
 
 ## Key Components
 
 ### avellaneda.py
 
 The main strategy implementing the Avellaneda-Stoikov model:
-- **Dynamic spread calculation** using γ, k, σ parameters
+- **Dynamic spread calculation** using γ, κ, σ parameters
 - **Inventory-aware pricing** with asymmetric bid-ask spreads
 - **Real-time parameter loading** from `avellaneda_parameters_BTC.json`
 - **Automated parameter recalculation** through integrated runner
@@ -152,7 +152,7 @@ The main strategy implementing the Avellaneda-Stoikov model:
 
 ### Parameter Calculation Scripts
 
-- **calculate_avellaneda_parameters.py**: Unified parameter estimation for γ, k, σ
+- **calculate_avellaneda_parameters.py**: Unified parameter estimation for γ, κ, σ
 - **run_avellaneda_param_calculation.py**: Strategy-integrated parameter updates
 - **Research notebook**: Francesco_Mangia_Avellaneda_BTC.ipynb (parameter analysis and research)
 
@@ -164,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
