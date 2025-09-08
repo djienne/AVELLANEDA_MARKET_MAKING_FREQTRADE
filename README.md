@@ -155,12 +155,12 @@ The main Freqtrade strategy implementing the Avellaneda-Stoikov model:
 
 ## Disclaimer
 
-This software is for educational and research purposes. Market making involves significant financial risk. Always test thoroughly in dry-run mode before deploying with real capital. Past performance does not guarantee future results.
-ONLY USE IN DRY-RUN
+This software is for educational and research purposes. Market making involves significant financial risk. Always test thoroughly in Dry-Run (paper trading) mode before deploying with real capital. Past performance does not guarantee future results.
 
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
