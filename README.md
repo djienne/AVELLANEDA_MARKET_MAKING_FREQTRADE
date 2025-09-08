@@ -30,7 +30,7 @@ This project implements an advanced market making strategy that:
 - **Core strategy**: `avellaneda.py` - Main Avellaneda-Stoikov Freqtrade strategy implementation
 - **Parameter calculation**: `calculate_avellaneda_parameters.py` - Unified estimation of parameters {`σ`, `κ`, `γ`}
 - **Data collection**: `HL_data_collector/` - Separate service for market data gathering (time-tagged bid/ask spread, time-tagged filled order list, time-tagged orderbooks)
-- **Parameter runner**: `run_avellaneda_param_calculation.py` - Automated parameter updates at regular intervals
+- **Parameter runner**: `run_avellaneda_param_calculation.py` - Automated parameter {`σ`, `κ`, `γ`} updates once a day
 
 ## Project Structure
 
@@ -164,6 +164,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
