@@ -95,6 +95,13 @@ Where:
 
 And the final best buy and sell limit order prices:
 
+$$
+\begin{aligned}
+\text{buy}_{\text{price}} &= r - \delta_b \\
+\text{sell}_{\text{price}} &= r + \delta_a
+\end{aligned}
+$$
+
 If $r \geq s$:
 
 $$
@@ -112,14 +119,6 @@ $$
 \delta_b &= \text{spread} + \text{gap}
 \end{aligned}
 $$
-
-$$
-\begin{aligned}
-\text{buy}_{\text{price}} &= r - \delta_b \\
-\text{sell}_{\text{price}} &= r + \delta_a
-\end{aligned}
-$$
-
 
 
 ### Parameter Estimation and Calibration
@@ -164,6 +163,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
