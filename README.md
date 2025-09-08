@@ -106,8 +106,8 @@ If $r \geq s$:
 
 $$
 \begin{aligned}
-\delta_a &= \text{spread} + \text{gap} \\
-\delta_b &= \text{spread} - \text{gap}
+\delta_a &= \text{spread}/2 + \text{gap} \\
+\delta_b &= \text{spread}/2 - \text{gap}
 \end{aligned}
 $$
 
@@ -115,8 +115,8 @@ If $r < s$:
 
 $$
 \begin{aligned}
-\delta_a &= \text{spread} - \text{gap} \\
-\delta_b &= \text{spread} + \text{gap}
+\delta_a &= \text{spread}/2 - \text{gap} \\
+\delta_b &= \text{spread}/2 + \text{gap}
 \end{aligned}
 $$
 
@@ -160,6 +160,7 @@ This software is for educational and research purposes. Market making involves s
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
