@@ -85,19 +85,26 @@ Where:
 * $\gamma$, a risk factor that is adjusted to meet the risk/return trade-off of the market maker
 * $x$, the initial capital of the market maker
 * $k$, the intensity of the arrival of orders
-* $s$ the per-unit mid-price of the asset
-* $T$, the end of the time series
+* $s$ the mid-price of the asset
+* $T$, the end of the time series, (T - t) here is between 0 and 1 and is the fractional number of days left before the end of day.
 * $\sigma$, the volatility of the asset
 * $q$, the number of assets held in inventory
 
+if $r$>=$s$:
 $$
-\boxed{%
-\begin{aligned}
-p_{\text{bid}}(t) &= S_t - q\gamma\sigma^{2}(T-t)\;-\;\left(\frac{1}{\gamma}\ln\!\Bigl(1+\frac{\gamma}{k}\Bigr)+\tfrac{1}{2}\gamma\sigma^{2}(T-t)\right),\\[6pt]
-p_{\text{ask}}(t) &= S_t - q\gamma\sigma^{2}(T-t)\;+\;\left(\frac{1}{\gamma}\ln\!\Bigl(1+\frac{\gamma}{k}\Bigr)+\tfrac{1}{2}\gamma\sigma^{2}(T-t)\right).
-\end{aligned}
-}
+\delta_a = spread + gap
+\delta_b = spread - gap
 $$
+if $r$<$s$:
+$$
+\delta_a = spread - gap
+\delta_b = spread + gap
+$$
+$$
+buy_price = r - \delta_a
+sell_price = r + \delta_a
+$$
+
 
 ### Parameter Estimation and Calibration
 
@@ -148,6 +155,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
