@@ -19,7 +19,7 @@ This project implements an advanced market making strategy that:
 - **Sigma parameter** (`σ`): Price volatility estimate
 - **K parameter** (`k`): Order flow intensity factor
 - **Gamma parameter** (`γ`): Risk aversion coefficient
-- **Real-time recalibration** through automated parameter calculation
+- **Real-time recalibration** through automated parameter calculation. Updates once a day, parameters calculated from data of day N-1 is used for day N.
 
 ### 📊 Market Data Integration
 - **Order book analysis** for mid-price calculation and spread optimization
@@ -124,6 +124,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
