@@ -92,8 +92,8 @@ Where:
 
 if $r$>=$s$:
 $$
-\delta_a = spread + gap
-\delta_b = spread - gap
+{\delta}_a = spread + gap
+{\delta}_b = spread - gap
 $$
 if $r$<$s$:
 $$
@@ -155,6 +155,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
