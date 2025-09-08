@@ -87,7 +87,6 @@ $$
 Where:
 
 * $\gamma$, a risk factor that is adjusted to meet the risk/return trade-off of the market maker
-* $x$, the initial capital of the market maker
 * $k$, the intensity of the arrival of orders
 * $s$ the mid-price of the asset
 * $T$, the end of the time series, (T - t) here is between 0 and 1 and is the fractional number of days left before the end of day.
@@ -172,6 +171,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
