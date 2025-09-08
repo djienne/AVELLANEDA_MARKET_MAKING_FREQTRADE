@@ -18,7 +18,7 @@ This project implements an advanced market making strategy that:
 ### 🎯 Dynamic Spread Calculation
 - **Sigma parameter** (`σ`): Price volatility estimate
 - **K parameter** (`k`): Order flow intensity factor
-- **Gamma parameter** (`γ`): Risk aversion coefficient controlling inventory penalties
+- **Gamma parameter** (`γ`): Risk aversion coefficient
 - **Real-time recalibration** through automated parameter calculation
 
 ### 📊 Market Data Integration
@@ -124,6 +124,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
