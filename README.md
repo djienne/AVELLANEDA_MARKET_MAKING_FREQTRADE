@@ -130,7 +130,7 @@ $$
 
 **Kappa (κ) Parameter - Order Flow Intensity:**
 - Estimated from order book data: `λ(δ) = A e^(-κ δ)`
-- Fitted using fit on historical order list and bid-ask spreads
+- Fitted using historical filled order list and bid-ask spreads
 
 **Sigma (σ) - Volatility:**
 - Estimated from recent prices using rolling windows
@@ -160,6 +160,7 @@ This software is for educational and research purposes. Market making involves s
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
