@@ -71,7 +71,7 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 Avellaneda and Stoikov's paper study the optimal submission strategies of bid and ask orders in a limit order book, "*balancing between the dealer’s personal risk considerations and the market environment*" and defining the bid/ask spread as:
 
 $$
-\text{bid / ask spread} = \gamma \sigma ^2 (T - t) + \frac{2}{\gamma}\ln\left(1 + \frac{\gamma}{k}\right)
+\text{bid / ask spread} = \text{spread} = \gamma \sigma ^2 (T - t) + \frac{2}{\gamma}\ln\left(1 + \frac{\gamma}{k}\right)
 $$
 
 This spread is defined around a reservation price i.e. a price at which a market maker is indifferent between their current portfolio and their current portfolio $\pm$ a new share. The reservation price is derived in the whitepaper as follows:
@@ -168,6 +168,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
