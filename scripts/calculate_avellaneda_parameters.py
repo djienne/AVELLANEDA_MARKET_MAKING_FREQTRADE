@@ -455,8 +455,6 @@ if len(list_of_days)>1:
         s = s.ffill()
         s = s['mid_price']
 
-        m = mid_price_df.loc[date]
-
         # Pre-compute data that doesn't change across gamma tests
         buy_trades_day = buy_trades.loc[date]
         sell_trades_day = sell_trades.loc[date]
@@ -575,7 +573,7 @@ k = klist[-2]
 A = Alist[-2]
 
 time_remaining = 0.16666  # Fraction of trading day remaining (e.g. at 20:00 it is 0.16666)
-q = 10.0*s/10.0  # Current inventory position (positive = long, negative = short)
+q = 10.0  # Current inventory position (positive = long, negative = short)
 
 # Calculate base spread using Avellaneda-Stoikov formula
 spread_base = gamma * sigma**2.0 * time_remaining + (2.0 / gamma) * np.log(1.0 + (gamma / k))
