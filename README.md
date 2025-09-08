@@ -135,7 +135,7 @@ $$
 **Sigma (σ) - Volatility:**
 - Estimated from recent prices using rolling windows
 
-There is one {`σ`, `κ`, `γ`} set used per day.
+There is one {`σ`, `κ`, `γ`} set calculated and used per day.
 
 ## Key Components
 
@@ -162,6 +162,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
