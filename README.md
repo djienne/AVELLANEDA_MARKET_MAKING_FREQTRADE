@@ -77,7 +77,7 @@ $$
 This spread is defined around a reservation price i.e. a price at which a market maker is indifferent between their current portfolio and their current portfolio $\pm$ a new share. The reservation price is derived in the whitepaper as follows:
 
 $$
-\text{reservation price} = s - q\gamma\sigma^2(T-t)
+\text{reservation price} = r = s - q\gamma\sigma^2(T-t)
 $$
 
 Where:
@@ -168,6 +168,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
