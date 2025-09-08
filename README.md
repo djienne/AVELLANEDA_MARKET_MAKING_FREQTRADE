@@ -30,7 +30,7 @@ This project implements an advanced market making strategy that:
 - **Core strategy**: `avellaneda.py` - Main Avellaneda-Stoikov Freqtrade strategy implementation
 - **Parameter calculation**: `calculate_avellaneda_parameters.py` - Unified parameter estimation
 - **Data collection**: `HL_data_collector/` - Separate service for market data gathering (time-tagged bid/ask spread, time-tagged filled order list, time-tagged orderbooks)
-- **Parameter runner**: `run_avellaneda_param_calculation.py` - Automated parameter updates are regular intervals
+- **Parameter runner**: `run_avellaneda_param_calculation.py` - Automated parameter updates at regular intervals
 
 ## Project Structure
 
@@ -45,18 +45,17 @@ ADVANCED_MM/
 ├── scripts/
 │   ├── calculate_avellaneda_parameters.py # Unified parameter calculation
 │   ├── avellaneda_parameters_BTC.json # Current model parameters (BTC)
-│   ├── Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook with most of what was implemented, with some changes
-│   ├── requirements.txt              # Python dependencies
-│   └── docker-compose.yml            # Container config for scripts
+│   ├── Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook describing most of what was implemented, with some changes
+│   └── requirements.txt              # Python dependencies
 ├── HL_data_collector/                # Separate data collection service
 │   ├── hyperliquid_data_collector.py # Market data gathering
 │   ├── run_collector.py              # Data collector orchestrator
-│   ├── HL_data/                      # Collected market data (CSV files)
-│   ├── Dockerfile                    # Data collector container
+│   ├── HL_data/                      # Folder containing collected market data (CSV files)
+│   ├── Dockerfile                    # Data collector docker container build
 │   └── requirements.txt              # Python dependencies
 ├── docker-compose.yml                # Main container orchestration
-├── Dockerfile.technical              # Extra python libraries installation in for docker compose
-└── show_PnL.py                       # Profit and loss analysis tool
+├── Dockerfile.technical              # Extra python libraries installation for docker compose
+└── show_PnL.py                       # Profit and loss analysis display tool
 ```
 
 ## Mathematical Foundation
@@ -67,21 +66,42 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 
 **Core Model Elements:**
 
+### Avellaneda & Stoikov's Paper
+
+Avellaneda and Stoikov's paper study the optimal submission strategies of bid and ask orders in a limit order book, "*balancing between the dealer’s personal risk considerations and the market environment*" and defining the bid/ask spread as:
+
+$$
+\text{bid / ask spread} = \gamma \sigma ^2 (T - t) + \frac{2}{\gamma}\ln\left(1 + \frac{\gamma}{k}\right)
+$$
+
+This spread is defined around a reservation price i.e. a price at which a market maker is indifferent between their current portfolio and their current portfolio $\pm$ a new share. The reservation price is derived in the whitepaper as follows:
+
+$$
+\text{reservation price} = s - q\gamma\sigma^2(T-t)
+$$
+
+Where:
+
+* $\gamma$, a risk factor that is adjusted to meet the risk/return trade-off of the market maker
+* $x$, the initial capital of the market maker
+* $k$, the intensity of the arrival of orders
+* $s$ the per-unit mid-price of the asset
+* $T$, the end of the time series
+* $\sigma$, the volatility of the asset
+* $q$, the number of assets held in inventory
+
 ### Parameter Estimation and Calibration
 
 **Gamma (γ) - Risk Aversion:**
-- Calculated from optimal portfolio theory and risk preferences
 - Controls the trade-off between profit and inventory risk
 - Higher γ → tighter spreads around zero inventory
 
 **K Parameter - Order Flow Intensity:**
 - Estimated from order book data: `λ(δ) = A e^(-k δ)`
 - Fitted using regression on historical order arrival rates vs spread
-- Critical for determining optimal spread width
 
 **Sigma (σ) - Volatility:**
 - Estimated from recent price returns using rolling windows
-- Calculated from high-frequency mid-price movements
 - Used for both spread calculation and risk assessment
 
 ## Key Components
@@ -119,6 +139,7 @@ ONLY USE IN DRY-RUN
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
