@@ -7,22 +7,28 @@ import pandas as pd
 import scipy.optimize
 import sys
 import os
+import argparse
 from pathlib import Path
 from numba import jit
 import json
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Calculate Avellaneda-Stoikov market making parameters')
+parser.add_argument('ticker', nargs='?', default='BTC', help='Ticker symbol (default: BTC)')
+args = parser.parse_args()
 
 # Get HL_data directory from environment variable or use current directory as fallback
 script_dir = Path(__file__).parent.absolute().parent
 default_if_not_env = script_dir / 'HL_data_collector' / 'HL_data'
 print(default_if_not_env)
 HL_DATA_DIR = os.getenv('HL_DATA_LOC', default_if_not_env)
-print(HL_DATA_DIR)
+
 
 # How frequently limit orders are refreshed (impacts order fill detection)
 limit_order_refresh_rate = '10s'
 
-# Set the ticker symbol here
-TICKER = 'BTC'  # Change this to any ticker like 'ETH', 'SOL', 'WLFI', 'BTC'.
+# Set the ticker symbol from CLI argument
+TICKER = args.ticker
 
 # Calculate only last gamma value (faster) instead of all days
 CALCULATE_ONLY_LAST_GAMMA = True
@@ -196,7 +202,7 @@ klist = []
 
 print(f"Doing {len(list_of_days)} days")
 
-def process_dates(list_of_dates, buy_orders, sell_orders, deltalist, exp_fit):
+def process_dates_for_k(list_of_dates, buy_orders, sell_orders, deltalist, exp_fit):
     """
     Process dates using real buy and sell order data instead of mid-price movements.
     
@@ -284,7 +290,7 @@ def process_dates(list_of_dates, buy_orders, sell_orders, deltalist, exp_fit):
 
     return Alist, klist
 
-Alist, klist = process_dates(list_of_days, buy_trades, sell_trades, delta_list, exp_fit)
+Alist, klist = process_dates_for_k(list_of_days, buy_trades, sell_trades, delta_list, exp_fit)
 
 print(f"Alist: {Alist}")
 print(f"klist: {klist}")
@@ -423,12 +429,12 @@ if len(list_of_days)>1:
     # Choose range based on CALCULATE_ONLY_LAST_GAMMA setting
     if CALCULATE_ONLY_LAST_GAMMA:
         # Only calculate gamma for the last day
-        gamma_range = range(len(list_of_days)-1, len(list_of_days))
+        day_index_range = range(len(list_of_days), len(list_of_days))
     else:
         # Calculate gamma for all days (original behavior)
-        gamma_range = range(1, len(list_of_days))
+        day_index_range = range(1, len(list_of_days))
     
-    for j in gamma_range:
+    for j in day_index_range:
 
         # Get parameters from previous day
         sigma = sigma_list[j-1]
@@ -499,11 +505,10 @@ if len(list_of_days)>1:
             print(f"Sharpe: {sharpe}")
             print(f"score: {sharpe}")
 
-            return [round(gamma, 5), sharpe]
+            return [round(gamma, 5), sharpe/abs(final_inventory)]
 
         # Test different gamma values sequentially with pre-allocated results
         gamma_results = []
-        gamma_results_reserve = len(gamma_grid_to_test)
         
         for i, gamma in enumerate(gamma_grid_to_test):
             print("-"*20)
