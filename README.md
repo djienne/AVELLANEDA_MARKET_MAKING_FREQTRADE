@@ -135,7 +135,7 @@ $$
 **Sigma (σ) - Volatility:**
 - Estimated from recent prices using rolling windows
 
-There is one {`σ`, `κ`, `γ`} set calculated and used per day.
+There is one {`σ`, `κ`, `γ`} set calculated and used per day. The set calculated using day N-1 data is used for day N.
 
 ## Key Components
 
@@ -160,6 +160,7 @@ This software is for educational and research purposes. Market making involves s
 ## License
 
 This project implements academic market making models and is intended for research and educational use.
+
 
 
 
