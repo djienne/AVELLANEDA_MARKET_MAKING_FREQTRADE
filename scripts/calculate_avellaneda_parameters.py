@@ -429,7 +429,7 @@ if len(list_of_days)>1:
     # Choose range based on CALCULATE_ONLY_LAST_GAMMA setting
     if CALCULATE_ONLY_LAST_GAMMA:
         # Only calculate gamma for the last day
-        day_index_range = range(len(list_of_days), len(list_of_days))
+        day_index_range = range(len(list_of_days)-1, len(list_of_days))
     else:
         # Calculate gamma for all days (original behavior)
         day_index_range = range(1, len(list_of_days))
