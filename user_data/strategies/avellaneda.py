@@ -43,7 +43,7 @@ pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', None)
 pd.options.mode.chained_assignment = None
 
-def calculate_optimal_spreads(mid_price,sigma,k,gamma,time_remaining,q_inventory_exposure):
+def calculate_optimal_spreads(mid_price,sigma,k,gamma,time_remaining,q_inventory_exposure, fee):
     # Calculate base spread using Avellaneda-Stoikov formula
     spread_base = gamma * sigma**2.0 * time_remaining + (2.0 / gamma) * np.log(1.0 + (gamma / k))
     half_spread = spread_base / 2.0
@@ -68,8 +68,8 @@ def calculate_optimal_spreads(mid_price,sigma,k,gamma,time_remaining,q_inventory
         delta_b = half_spread + gap  # Widen bid (buy at lower price)
 
     # Calculate limit order prices
-    r_b = r - delta_b
-    r_a = r + delta_a
+    r_b = r - delta_b - mid_price*fee
+    r_a = r + delta_a + mid_price*fee
 
     # Calculate relative percentages
     delta_a_percent = (abs(r_b-mid_price) / mid_price) * 100.0
@@ -82,6 +82,7 @@ def calculate_optimal_spreads(mid_price,sigma,k,gamma,time_remaining,q_inventory
     mm_logger.info(f"│ Inventory Exposure         │ {q_inventory_exposure:>12.4f}          │")
     mm_logger.info(f"│ Sigma (Volatility)         │ {sigma:>12.4f}          │")
     mm_logger.info(f"│ K                          │ {k:>12.4f}          │")
+    mm_logger.info(f"│ maker fee                  │ {fee:>12.5f}          │")
     mm_logger.info(f"│ Gamma                      │ {gamma:>12.4f}          │")
     mm_logger.info(f"│ Mid-Price                  │ {mid_price:>12.4f}          │")
     mm_logger.info(f"│ Reservation Price          │ {r:>12.4f}          │")
@@ -223,6 +224,8 @@ class avellaneda(IStrategy):
     k = None
     sigma = None
 
+    fees_HL_maker = 0.015/100.0
+
     nb_loop = 0
 
     stoploss = -0.75
@@ -339,7 +342,7 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         q_inventory_exposure = total_quote_position / float(self.config['stake_amount'])
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy
 
@@ -358,7 +361,7 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         q_inventory_exposure = total_quote_position / float(self.config['stake_amount'])
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
 
         return r_sell
 
@@ -377,7 +380,7 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         q_inventory_exposure = total_quote_position / float(self.config['stake_amount'])
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy
 
