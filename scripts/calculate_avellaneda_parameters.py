@@ -5,10 +5,12 @@
 import numpy as np
 import pandas as pd
 import scipy.optimize
+from scipy.optimize import brentq, fsolve
 import sys
 import os
 import argparse
 from pathlib import Path
+import warnings
 from numba import jit
 import json
 
@@ -25,7 +27,7 @@ HL_DATA_DIR = os.getenv('HL_DATA_LOC', default_if_not_env)
 
 
 # How frequently limit orders are refreshed (impacts order fill detection)
-limit_order_refresh_rate = '10s'
+limit_order_refresh_rate = '5s'
 
 # Set the ticker symbol from CLI argument
 TICKER = args.ticker
@@ -52,10 +54,7 @@ print(f"DOING: {TICKER}")
 # Price deltas (spreads from mid-price) to test for order arrival intensity estimation
 # Range from 1 tick to 1000 ticks with 32 points for fitting λ(δ) = A*exp(-k*δ)
 delta_list = np.arange(tick_size, 50.0*tick_size, tick_size)
-
-# Risk aversion parameter grid for gamma optimization
-# Log-spaced from 0.01 to 8.0 to test wide range of risk preferences
-gamma_grid_to_test = np.logspace(np.log10(0.01), np.log10(5.0), 32)
+    
 
 # Load trades data
 def load_trades_data(csv_path):
@@ -298,6 +297,121 @@ print(f"klist: {klist}")
 # Find optimal risk aversion parameter γ by maximizing risk-adjusted PnL
 # γ controls the trade-off between inventory risk and profit maximization
 
+def find_gamma(target_spread, spread_func, k):
+    """Find gamma value that produces target_spread using robust numerical methods."""
+    
+    def equation(gamma):
+        if gamma <= 0:
+            return float('inf')
+        try:
+            return spread_func(gamma) - target_spread
+        except:
+            return float('inf')
+    
+    def is_valid(gamma, tolerance=1e-6):
+        if gamma <= 0:
+            return False
+        try:
+            return abs(spread_func(gamma) - target_spread) < tolerance
+        except:
+            return False
+    
+    # Strategy 1: Bracketing method (most robust)
+    try:
+        gamma_min, gamma_max = 1e-8, 1000.0
+        if equation(gamma_min) * equation(gamma_max) < 0:
+            gamma = brentq(equation, gamma_min, gamma_max)
+            if is_valid(gamma):
+                return gamma
+    except:
+        pass
+    
+    # Strategy 2: Multiple starting points with fsolve
+    for guess in [1.0, k, 0.1, 10.0, k*10, k*0.1]:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                result = fsolve(equation, guess, full_output=True)
+                if result[2] == 1 and is_valid(result[0][0]):
+                    return result[0][0]
+        except:
+            continue
+    
+    # Strategy 3: Grid search fallback
+    try:
+        gamma_grid = np.logspace(-6, 3, 1000)
+        errors = [abs(equation(g)) if equation(g) != float('inf') else float('inf') 
+                 for g in gamma_grid]
+        best_gamma = gamma_grid[np.argmin(errors)]
+        if is_valid(best_gamma):
+            return best_gamma
+    except:
+        pass
+    
+    raise ValueError(f"Could not find gamma for target_spread = {target_spread}")
+
+def find_workable_spread(initial_spread, spread_func, k, direction='up', 
+                        factor=1.05, max_iterations=10000):
+    """Find a workable spread by adjusting initial_spread up or down."""
+    
+    spread = initial_spread
+    bounds = (0.00001, 1000.0) if direction == 'up' else (1000.0, 0.00001)
+    
+    for i in range(max_iterations):
+        if direction == 'up' and spread > bounds[1]:
+            print(f"Reached maximum spread ({bounds[1]}). No solution found.")
+            return None, None
+        elif direction == 'down' and spread < bounds[1]:
+            print(f"Reached minimum spread ({bounds[1]}). No solution found.")
+            return None, None
+            
+        try:
+            gamma = find_gamma(spread, spread_func, k)
+            print(f"Success! spread = {spread:.6f}, gamma = {gamma:.6f}")
+            print(f"Verification: spread = {spread_func(gamma):.6f}")
+            return spread, gamma
+        except:
+            print(f"Failed for spread = {spread:.6f}, trying {spread * factor:.6f}")
+            spread *= factor if direction == 'up' else (2 - factor)
+    
+    print(f"Reached max iterations ({max_iterations}). No solution found.")
+    return None, None
+
+def calculate_gamma_grid(s, sigma, k):
+    """Calculate gamma grid based on spread analysis."""
+    
+    time_remaining = 0.33
+    
+    def spread(gamma):
+        return (gamma * sigma**2 * time_remaining + 
+                (2.0 / gamma) * np.log(1.0 + (gamma / k))) / s * 100.0
+    
+    # Find gamma for small spread (0.01 or closest workable)
+    try:
+        gamma_001 = find_gamma(0.01, spread, k)
+        print(f"For spread = 0.01: gamma = {gamma_001:.6f}")
+    except:
+        _, gamma_001 = find_workable_spread(0.01, spread, k, 'up')
+        if gamma_001 is None:
+            print("Warning: cannot find maximum gamma. Model doesn't work well for this asset.")
+            return None
+    
+    # Find gamma for large spread (1.0 or closest workable)  
+    try:
+        gamma_1 = find_gamma(1.0, spread, k)
+        print(f"For spread = 1.0: gamma = {gamma_1:.6f}")
+    except:
+        _, gamma_1 = find_workable_spread(1.0, spread, k, 'down')
+        if gamma_1 is None:
+            print("Warning: cannot find minimum gamma. Model doesn't work well for this asset.")
+            return None
+    
+    # Generate gamma grid
+    gamma_grid = np.logspace(np.log10(gamma_1 * 0.99), 
+                            np.log10(gamma_001 * 1.01), 32)
+    print(gamma_grid)
+    return gamma_grid
+
 @jit(nopython=True)
 def _backtest_core(s_values, buy_min_values, sell_max_values, gamma, k, sigma, fee, time_remaining, spread_base, half_spread):
     """
@@ -421,7 +535,7 @@ def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k, sigma, fee=0.000
 
 gammalist = []
 
-print(gamma_grid_to_test)
+gamma_grid_to_test = None
 
 # Walk-forward analysis: use parameters estimated from day t-1 to trade on day t
 # This simulates realistic out-of-sample performance
@@ -454,6 +568,13 @@ if len(list_of_days)>1:
         # exist for a given second-interval
         s = s.ffill()
         s = s['mid_price']
+
+        if gamma_grid_to_test is None:
+            gamma_grid_to_test = calculate_gamma_grid(s.iloc[-1], sigma, k)
+
+        if gamma_grid_to_test is None:
+            print("Could not find a reasonable gamma interval. Market is probably not suitable for this AS model. Aborting.")
+            sys.exit()
 
         # Pre-compute data that doesn't change across gamma tests
         buy_trades_day = buy_trades.loc[date]
@@ -493,6 +614,9 @@ if len(list_of_days)>1:
 
             final_pnl = res['pnl'][-1]
             final_inventory = res['q'][-1]
+
+            if final_inventory == 0:
+                final_inventory = 1.0
             
             # Calculate Sharpe ratio using fast numba function
             sharpe = calculate_sharpe_fast(res['pnl'])
@@ -503,7 +627,7 @@ if len(list_of_days)>1:
             print(f"Sharpe: {sharpe}")
             print(f"score: {sharpe}")
 
-            return [round(gamma, 5), sharpe/abs(final_inventory)]
+            return [round(gamma, 5), final_pnl/abs(final_inventory)]
 
         # Test different gamma values sequentially with pre-allocated results
         gamma_results = []
@@ -511,6 +635,8 @@ if len(list_of_days)>1:
         for i, gamma in enumerate(gamma_grid_to_test):
             print("-"*20)
             print(f"Doing gamma: {gamma} ({i+1}/{len(gamma_grid_to_test)})")
+            spread_base = gamma * sigma**2.0 * 0.5 + (2.0 / gamma) * np.log(1.0 + (gamma / k))
+            print(f"Spread base: {spread_base/s.iloc[-1]*100.0:.3f}%")
             result = backtest_gamma(gamma, s, k, sigma)
             gamma_results.append(result)
 
