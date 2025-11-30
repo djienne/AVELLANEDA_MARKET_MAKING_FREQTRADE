@@ -1,38 +1,38 @@
 {
     "ticker": "PAXG",
-    "timestamp": "2025-11-30T23:23:21.715774",
+    "timestamp": "2025-11-30T23:39:48.926015",
     "market_data": {
-        "mid_price": 4235.15,
-        "sigma": 0.005089220284006037,
-        "A_bid": 0.04793923996292926,
-        "k_bid": 0.27147134021343616,
-        "A_ask": 0.050862441235708246,
-        "k_ask": 0.6016083143580268
+        "mid_price": 4238.0,
+        "sigma": 0.00874741780927186,
+        "A_bid": 0.08573916287327508,
+        "k_bid": 0.8269731962177466,
+        "A_ask": 0.07922098397476608,
+        "k_ask": 0.43016342488776355
     },
     "optimal_parameters": {
-        "gamma": 0.4983232972433016,
-        "time_horizon_hours": 0.0695639850551781
+        "gamma": 1.1176501532031764,
+        "time_horizon_hours": 0.04170251343000147
     },
     "current_state": {
-        "time_remaining_days_fixed": 0.002898499377299088,
+        "time_remaining_days_fixed": 0.0017376047262500612,
         "inventory": 0,
         "analysis_window_hours": 0.25,
         "ma_window": 3,
         "num_data_periods": 8
     },
     "calculated_values": {
-        "reservation_price": 4235.15,
+        "reservation_price": 4238.0,
         "gap": 0.0,
-        "spread_base": 3.9734051337618994,
-        "half_spread_bid": 2.427049738661664,
-        "half_spread_ask": 1.5463553951002353
+        "spread_base": 4.579629767532507,
+        "half_spread_bid": 2.099512882398927,
+        "half_spread_ask": 2.4801168851335795
     },
     "limit_orders": {
-        "ask_price": 4236.6963553951,
-        "bid_price": 4232.722950261338,
-        "delta_a": 1.5463553951003632,
-        "delta_b": 2.4270497386614807,
-        "delta_a_percent": 0.036512411487205014,
-        "delta_b_percent": 0.05730729109149572
+        "ask_price": 4240.480116885134,
+        "bid_price": 4235.900487117601,
+        "delta_a": 2.4801168851336115,
+        "delta_b": 2.0995128823988125,
+        "delta_a_percent": 0.0585209269734217,
+        "delta_b_percent": 0.049540181274157914
     }
 }

@@ -16,7 +16,7 @@ The system is designed to be self-sufficient:
 
 This project implements an advanced market making strategy for Hyperliquid, dynamically calculating optimal bid-ask spreads using the Avellaneda-Stoikov model with real-time parameter estimation.
 
-**Current Configuration:** The included configuration is set to trade PAXG/USDC. The system includes pre-calculated parameters for two trading pairs: PAXG and ETH. To switch trading pairs, update both `user_data/config.json` (exchange.pair_whitelist) and ensure the corresponding parameter file exists in `scripts/` (see "Switching Trading Pairs" below).
+**Current Configuration:** The included configuration is set to trade PAXG/USDC. The system includes pre-calculated parameters for two trading pairs: PAXG and ETH. To switch trading pairs, change `exchange.pair_whitelist` in `user_data/config.json`; the strategy and parameter tooling will pick up the first pair and look for `avellaneda_parameters_{TICKER}.json` automatically.
 
 ## Project Structure
 
@@ -74,32 +74,15 @@ The main configuration for the Freqtrade bot is in the `user_data/config.json` f
 
 ## Switching Trading Pairs
 
-The system includes pre-calculated Avellaneda parameters for two trading pairs: **PAXG** and **ETH**.
+Change the pair once in `user_data/config.json` under `exchange.pair_whitelist` (first entry) and the rest will follow. The strategy reads that pair to pick the matching parameter file `avellaneda_parameters_{TICKER}.json`, and the parameter calculator defaults to the same ticker when no CLI ticker is provided.
 
-**To switch to a different trading pair:**
-
-1. **Update the configuration file** (`user_data/config.json`):
-   - Modify "exchange.pair_whitelist" to your desired pair (for example, ["ETH/USDC:USDC"] or ["PAXG/USDC:USDC"]).
-
-2. **Update the strategy file** (`user_data/strategies/avellaneda.py`):
-   - The strategy currently loads `avellaneda_parameters_PAXG.json` by default. Change `param_file_name` to the file that matches your pair (for ETH: `avellaneda_parameters_ETH.json`; for custom pairs: your own generated file).
-
-3. **Ensure the data collector is configured** for your pair:
-   - The `hl-collector` service collects ETH and PAXG by default.
-   - To add other pairs, modify the `SYMBOLS` environment variable in `docker-compose.yml` (line 41 by default).
-
-4. **Restart the services**:
-   ```bash
-   docker-compose down
-   docker-compose up
-   ```
-
-**Note:** When the parameter calculation script runs manually, its CLI default ticker is `ETH`. The runner used by the bot resolves the symbol from your config or environment. To generate parameters for another pair, run:
-```bash
-python scripts/calculate_avellaneda_parameters.py ETH  # or PAXG
+Parameter files live in `scripts/` by default (override with `AVELLANEDA_PARAMS_DIR`). After editing the pair, regenerate parameters with:
 ```
-
-**Alternative Configuration:** A `user_data/config_short.json` file is also available for short-selling strategies (currently disabled in docker-compose.yml).
+python scripts/calculate_avellaneda_parameters.py
+# or override explicitly
+python scripts/calculate_avellaneda_parameters.py ETH
+```
+The data collector is assumed to include this pair (and potentially more); adjust its env vars only if you add a pair it doesn't already track.
 
 ## Mathematical Foundation
 
@@ -157,7 +140,7 @@ delta_b = spread/2 + gap
 Parameters are recalculated automatically, rate-limited to **at most once every 15 minutes**:
 
 **Recalculation Mechanism:**
-- The strategy attempts to trigger recalculation every 10 bot loops (~150 minutes with 15-minute timeframe).
+- The strategy attempts to trigger recalculation every 10 bot loops (~150 seconds with 15-seconds `process_throttle_secs`).
 - A lock file (`.avellaneda_last_run.json`) prevents execution if parameters were calculated within the last 15 minutes.
 - This ensures parameters update regularly while preventing excessive computation.
 

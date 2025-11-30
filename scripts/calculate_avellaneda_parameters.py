@@ -14,6 +14,17 @@ from pathlib import Path
 import json
 print("DEBUG: Imports finished", flush=True)
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+STRATEGY_DIR = PROJECT_ROOT / "user_data" / "strategies"
+if STRATEGY_DIR.exists():
+    sys.path.append(str(STRATEGY_DIR))
+try:
+    from pair_loader import get_active_pair, pair_to_ticker
+except Exception as exc:
+    print(f"Warning: failed to import pair_loader ({exc}); defaulting to CLI ticker.", flush=True)
+    get_active_pair = None
+    pair_to_ticker = lambda pair: (pair or "").split("/")[0].split(":")[0].upper()
+
 # Import from modules
 from utils import get_tick_size, load_trades_data, load_effective_mid_price
 from volatility import calculate_volatility
@@ -24,11 +35,26 @@ from backtest import optimize_params
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Calculate Avellaneda-Stoikov market making parameters')
-    parser.add_argument('ticker', nargs='?', default='ETH', help='Ticker symbol')
+    parser.add_argument('ticker', nargs='?', default=None, help='Ticker symbol (defaults to first pair in config.json)')
     parser.add_argument('--minutes', type=int, default=15, 
                         help='Frequency in minutes to recalculate parameters (default: 15)')
     return parser.parse_args()
 
+
+
+def resolve_ticker(cli_ticker: str | None) -> str:
+    if cli_ticker:
+        return cli_ticker.upper()
+    if callable(get_active_pair) and callable(pair_to_ticker):
+        try:
+            pair = get_active_pair()
+            ticker = pair_to_ticker(pair)
+            if ticker:
+                print(f"Using ticker from config pair: {pair} -> {ticker}", flush=True)
+                return ticker
+        except Exception as exc:
+            print(f"Warning: failed to derive ticker from config: {exc}", flush=True)
+    return "ETH"
 
 def get_smoothed_parameters(param_list, ma_window, use_last_n=None):
     """
@@ -256,7 +282,7 @@ def print_summary(results, list_of_periods, output_dir=None):
 def main():
     """Main execution function."""
     args = parse_arguments()
-    TICKER = args.ticker
+    TICKER = resolve_ticker(args.ticker)
     N_minutes = args.minutes
     H = N_minutes / 60.0
 

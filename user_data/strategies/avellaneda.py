@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import math
 from typing import Optional, Tuple
 from dataclasses import dataclass
+from pair_loader import get_active_pair, pair_to_ticker
 
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,7 @@ def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
         p = p.parent
     raise FileNotFoundError(f"Could not find {filename} from {start}")
 
+
 def load_configs(start_dir: Path | None = None, max_up: int = 10):
     """
     Load Avellaneda parameters from JSON file, searching in multiple locations.
@@ -164,85 +166,58 @@ def load_configs(start_dir: Path | None = None, max_up: int = 10):
     Raises:
         FileNotFoundError: If the parameters file cannot be found
     """
-    # Get the parameter directory (consistent across environments)
     params_dir = get_params_directory()
 
-    # Get the current pair from config if available
-    # Default to PAXG if not available
-    param_file_name = "avellaneda_parameters_PAXG.json"
+    try:
+        active_pair = get_active_pair()
+    except Exception:
+        active_pair = None
+    ticker = pair_to_ticker(active_pair) or "PAXG"
+    param_file_name = f"avellaneda_parameters_{ticker}.json"
+    logger.info(f"Resolving parameters for pair '{active_pair or 'unknown'}' (ticker '{ticker}') using {params_dir}")
 
-    # Try to load from the params directory
     params_file = params_dir / param_file_name
 
     if params_file.exists():
         try:
-            params_MM = json.loads(params_file.read_text(encoding="utf-8"))
+            params_MM = json.loads(params_file.read_text(encoding='utf-8'))
             logger.info(f"Successfully loaded parameters from: {params_file}")
             return params_MM
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading {params_file}: {e}")
 
-    # Fallback: try legacy search locations for backward compatibility
     if start_dir is None:
         try:
             start_dir = Path(__file__).resolve().parent
         except NameError:  # e.g., interactive
             start_dir = Path(sys.argv[0]).resolve().parent if sys.argv and sys.argv[0] else Path.cwd()
 
-    # List of potential file locations to check (in order of preference)
     search_locations = [
-        "scripts/avellaneda_parameters_PAXG.json",  # Most likely location
-        "avellaneda_parameters_PAXG.json",          # Root directory
-        "user_data/strategies/avellaneda_parameters_PAXG.json",  # Same directory
-        "../scripts/avellaneda_parameters_PAXG.json",  # One level up then scripts
-        "../../scripts/avellaneda_parameters_PAXG.json"  # Two levels up then scripts
+        f"scripts/{param_file_name}",
+        param_file_name,
+        f"user_data/strategies/{param_file_name}",
+        f"../scripts/{param_file_name}",
+        f"../../scripts/{param_file_name}"
     ]
 
-    # First try to find the file using the existing upward search for each location
     for location in search_locations:
         try:
             params_file_found = find_upwards(location, start_dir, max_up)
-            params_MM = json.loads(params_file_found.read_text(encoding="utf-8"))
+            params_MM = json.loads(params_file_found.read_text(encoding='utf-8'))
             logger.info(f"Successfully loaded parameters from: {params_file_found}")
             return params_MM
         except FileNotFoundError:
             continue
-
-    # If upward search fails, try direct relative paths from start directory
-    for location in search_locations:
-        try:
-            # Try relative to start directory
-            params_path = start_dir / location
-            if params_path.exists():
-                params_MM = json.loads(params_path.read_text(encoding="utf-8"))
-                logger.info(f"Successfully loaded parameters from: {params_path}")
-                return params_MM
-
-            # Try relative to project root (go up to find project root)
-            current = start_dir
-            for _ in range(max_up):
-                potential_root = current / location
-                if potential_root.exists():
-                    params_MM = json.loads(potential_root.read_text(encoding="utf-8"))
-                    logger.info(f"Successfully loaded parameters from: {potential_root}")
-                    return params_MM
-                if current.parent == current:
-                    break
-                current = current.parent
-
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading {location}: {e}")
             continue
 
-    # If all attempts fail, provide helpful error message
     raise FileNotFoundError(
-        f"Could not find 'avellaneda_parameters_PAXG.json' in any of these locations:\n"
+        f"Could not find '{param_file_name}' in any of these locations:\n"
         f"  - Primary: {params_file}\n"
-        f"  - Fallback: {chr(10).join([str(start_dir / loc) for loc in search_locations])}\n"
-        f"Please ensure the file exists and is accessible."
+        f"  - " + "\n  - ".join(str(start_dir / loc) for loc in search_locations)
     )
 
-#---------------------------------------------------------- LOAD CONFIG ----------------------------------------------------------
 
 class avellaneda(IStrategy):
 
