@@ -3,6 +3,10 @@ user_data/logs/
 *.log
 *.log.*
 
+# Data files
+HL_data/
+HL_data_collector/HL_data/
+
 # Python
 __pycache__/
 *.py[cod]
