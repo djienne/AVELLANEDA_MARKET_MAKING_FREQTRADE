@@ -5,22 +5,13 @@ import scipy.optimize
 
 def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, deltalist, mid_price_df):
     """
-    Calculate order arrival intensity parameters (A and k) for bid and ask sides separately.
+    Calculate order arrival intensity parameters (A and k) for bid and ask sides separately using MLE.
     
     The intensity model is: lambda(delta) = A * exp(-k * delta)
     where delta is the distance from mid-price to our quote.
-    
-    - BID side intensity: How often do market SELL orders hit our bid quote?
-      (Taker sells = our bid gets filled)
-    - ASK side intensity: How often do market BUY orders hit our ask quote?
-      (Taker buys = our ask gets filled)
     """
     print("\n" + "-"*20)
     print("Calculating order arrival intensity (A and k) separately for Bid and Ask...")
-
-    def exp_fit(x, a, b):
-        """Exponential decay function: lambda(delta) = a * exp(-b * delta)"""
-        return a * np.exp(-b * x)
 
     A_bid_list, k_bid_list = [], []
     A_ask_list, k_ask_list = [], []
@@ -36,12 +27,8 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
         mask_sell = (sell_orders.index >= period_start) & (sell_orders.index < period_end)
         period_sell_orders = sell_orders.loc[mask_sell].copy()
 
-        if period_buy_orders.empty and period_sell_orders.empty:
-            A_bid_list.append(np.nan)
-            k_bid_list.append(np.nan)
-            A_ask_list.append(np.nan)
-            k_ask_list.append(np.nan)
-            continue
+        # We can attempt calculation even if orders are empty (counts will be 0)
+        # providing we have a valid mid price reference.
 
         # Calculate reference mid-price for this period
         best_bid = period_buy_orders['price'].max() if not period_buy_orders.empty else np.nan
@@ -60,9 +47,9 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
             k_ask_list.append(np.nan)
             continue
 
-        # Calculate inter-arrival times for different delta levels
-        interarrival_times_bid = {}
-        interarrival_times_ask = {}
+        # Data collection for fitting: (delta, count, duration)
+        bid_data_points = []
+        ask_data_points = []
         
         period_duration_seconds = H * 3600
         
@@ -72,52 +59,24 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
             
             # BID side: Market SELL orders hitting our bid
             # A sell order hits our bid if sell_price <= our_bid_price
-            bid_fill_times = []
+            n_bid_fills = 0
             if not period_sell_orders.empty:
-                sells_hitting_bid = period_sell_orders[period_sell_orders['price'] <= limit_bid_price]
-                if not sells_hitting_bid.empty:
-                    bid_fill_times = sells_hitting_bid.index.tolist()
-            
-            if len(bid_fill_times) > 1:
-                hit_times = pd.DatetimeIndex(bid_fill_times)
-                deltas = hit_times.to_series().diff().dt.total_seconds().dropna()
-                # FIX: Filter out zero or negative inter-arrival times
-                deltas = deltas[deltas > 0]
-                if len(deltas) > 0:
-                    interarrival_times_bid[price_delta] = deltas
-                else:
-                    interarrival_times_bid[price_delta] = pd.Series([period_duration_seconds])
-            else:
-                # No fills or only one fill - use period duration as proxy
-                interarrival_times_bid[price_delta] = pd.Series([period_duration_seconds])
+                n_bid_fills = len(period_sell_orders[period_sell_orders['price'] <= limit_bid_price])
+            bid_data_points.append((price_delta, n_bid_fills, period_duration_seconds))
 
             # ASK side: Market BUY orders hitting our ask  
             # A buy order hits our ask if buy_price >= our_ask_price
-            ask_fill_times = []
+            n_ask_fills = 0
             if not period_buy_orders.empty:
-                buys_hitting_ask = period_buy_orders[period_buy_orders['price'] >= limit_ask_price]
-                if not buys_hitting_ask.empty:
-                    ask_fill_times = buys_hitting_ask.index.tolist()
-            
-            if len(ask_fill_times) > 1:
-                hit_times = pd.DatetimeIndex(ask_fill_times)
-                deltas = hit_times.to_series().diff().dt.total_seconds().dropna()
-                # FIX: Filter out zero or negative inter-arrival times
-                deltas = deltas[deltas > 0]
-                if len(deltas) > 0:
-                    interarrival_times_ask[price_delta] = deltas
-                else:
-                    interarrival_times_ask[price_delta] = pd.Series([period_duration_seconds])
-            else:
-                interarrival_times_ask[price_delta] = pd.Series([period_duration_seconds])
+                n_ask_fills = len(period_buy_orders[period_buy_orders['price'] >= limit_ask_price])
+            ask_data_points.append((price_delta, n_ask_fills, period_duration_seconds))
 
-        # Fit exponential model to BID side
-        A_bid, k_bid = _fit_intensity_model(interarrival_times_bid, exp_fit, period_duration_seconds)
+        # Fit exponential model using MLE
+        A_bid, k_bid = _fit_intensity_mle(bid_data_points)
         A_bid_list.append(A_bid)
         k_bid_list.append(k_bid)
 
-        # Fit exponential model to ASK side
-        A_ask, k_ask = _fit_intensity_model(interarrival_times_ask, exp_fit, period_duration_seconds)
+        A_ask, k_ask = _fit_intensity_mle(ask_data_points)
         A_ask_list.append(A_ask)
         k_ask_list.append(k_ask)
 
@@ -134,65 +93,89 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
     return A_bid_list, k_bid_list, A_ask_list, k_ask_list
 
 
-def _fit_intensity_model(interarrival_times_dict, exp_fit, period_duration):
+def _fit_intensity_mle(data_points):
     """
-    Fit the exponential intensity model to inter-arrival time data.
+    Fit the exponential intensity model to observed data points using MLE.
+    Maximize Likelihood of Poisson process observations.
     
-    Returns (A, k) parameters or (nan, nan) if fitting fails.
+    Args:
+        data_points: List of (delta, count, T) tuples.
+        
+    Returns:
+        (A, k) parameters or (nan, nan).
     """
-    # Calculate lambda (arrival rate) for each delta level
-    deltas = []
-    lambdas = []
+    # Unzip data
+    deltas = np.array([p[0] for p in data_points])
+    counts = np.array([p[1] for p in data_points])
+    Ts = np.array([p[2] for p in data_points])
     
-    for delta, times in interarrival_times_dict.items():
-        mean_interarrival = times.mean()
-        
-        # FIX: Guard against division by zero
-        if mean_interarrival > 0:
-            lambda_val = 1.0 / mean_interarrival
-        else:
-            # If mean is zero, use a very small lambda (rare events)
-            lambda_val = 1.0 / period_duration
-        
-        deltas.append(delta)
-        lambdas.append(lambda_val)
-    
-    if len(deltas) < 2:
+    # If no fills at all, cannot estimate A (it tends to 0) or k (undefined)
+    if np.sum(counts) == 0:
         return np.nan, np.nan
-    
-    deltas = np.array(deltas)
-    lambdas = np.array(lambdas)
-    
-    # FIX: Filter out non-positive lambdas before fitting
-    valid_mask = lambdas > 0
-    if valid_mask.sum() < 2:
-        return np.nan, np.nan
-    
-    deltas = deltas[valid_mask]
-    lambdas = lambdas[valid_mask]
-    
-    try:
-        # Initial guess: A = max(lambda), k = 1/median(delta)
-        p0 = [lambdas.max(), 1.0 / np.median(deltas)]
         
-        # Bounds to ensure positive parameters
-        bounds = ([1e-10, 1e-10], [np.inf, np.inf])
-        
-        params, _ = scipy.optimize.curve_fit(
-            exp_fit, 
-            deltas, 
-            lambdas, 
-            p0=p0,
-            bounds=bounds,
-            maxfev=5000
-        )
+    # Negative Log Likelihood function for Poisson Process
+    # L = Product_j [ (lambda_j * T_j)^N_j * exp(-lambda_j * T_j) / N_j! ]
+    # ln(L) = Sum_j [ N_j * ln(lambda_j * T_j) - lambda_j * T_j - ln(N_j!) ]
+    # lambda_j = A * exp(-k * delta_j)
+    # ln(lambda_j) = ln(A) - k * delta_j
+    # Ignore constant terms (ln(N_j!), ln(T_j)) for optimization
+    # NLL ~ Sum_j [ lambda_j * T_j - N_j * (ln(A) - k * delta_j) ]
+    
+    def nll(params):
         A, k = params
+        if A <= 0 or k <= 0: return np.inf
         
-        # Sanity check: parameters should be reasonable
-        if A <= 0 or k <= 0 or not np.isfinite(A) or not np.isfinite(k):
+        lambdas = A * np.exp(-k * deltas)
+        term1 = lambdas * Ts
+        # Use simple log algebra: N * ln(lambda) = N * (ln(A) - k*delta)
+        term2 = counts * (np.log(A) - k * deltas)
+        
+        return np.sum(term1 - term2)
+
+    # Initial guess heuristic
+    # Use non-zero counts to estimate roughly via log-linear regression
+    mask = counts > 0
+    p0 = [1.0, 1.0] # Fallback
+    
+    if mask.sum() >= 2:
+        try:
+            # Empirical rate = count / T
+            # ln(rate) = ln(A) - k * delta
+            y = np.log(counts[mask] / Ts[mask])
+            x = deltas[mask]
+            slope, intercept = np.polyfit(x, y, 1)
+            # Ensure guesses are positive
+            k_guess = max(-slope, 0.01)
+            A_guess = max(np.exp(intercept), 0.01)
+            p0 = [A_guess, k_guess]
+        except:
+            pass
+    elif mask.sum() == 1:
+        # One point: assume k=1 and solve for A
+        # count/T = A * exp(-k * delta) -> A = (count/T) * exp(k * delta)
+        idx = np.where(mask)[0][0]
+        k_guess = 1.0
+        A_guess = (counts[idx] / Ts[idx]) * np.exp(k_guess * deltas[idx])
+        p0 = [A_guess, k_guess]
+
+    try:
+        # Run optimization
+        # method L-BFGS-B handles bounds efficiently
+        res = scipy.optimize.minimize(
+            nll, 
+            p0, 
+            bounds=[(1e-10, None), (1e-10, None)], 
+            method='L-BFGS-B'
+        )
+        
+        if res.success:
+            A, k = res.x
+            # Final sanity checks
+            if not np.isfinite(A) or not np.isfinite(k):
+                return np.nan, np.nan
+            return A, k
+        else:
             return np.nan, np.nan
             
-        return A, k
-        
-    except (RuntimeError, ValueError, scipy.optimize.OptimizeWarning) as e:
+    except Exception:
         return np.nan, np.nan

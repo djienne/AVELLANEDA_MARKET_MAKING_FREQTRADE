@@ -9,154 +9,473 @@ from numba import jit
 MIN_GAMMA = 1e-8
 
 
-def optimize_gamma(list_of_periods, sigma_list, A_bid_list, k_bid_list, A_ask_list, k_ask_list, 
+def optimize_params(list_of_periods, sigma_list, A_bid_list, k_bid_list, A_ask_list, k_ask_list, 
+
+
                    H, ma_window, mid_price_df, buy_trades, sell_trades, tick_size):
+
+
     """
-    Optimize risk aversion parameter (gamma) via backtesting.
+
+
+    Optimize risk aversion (gamma) and time horizon (T) via backtesting over ALL available data.
+
+
     
-    Uses historical periods to find the gamma that maximizes PnL while maintaining
-    reasonable spreads.
+
+
+    Returns:
+
+
+        (float, float): The optimal (gamma, time_horizon) tuple.
+
+
     """
+
+
     print("\n" + "-"*20)
-    print("Optimizing risk aversion (gamma) via backtesting...")
 
-    GAMMA_CALCULATION_WINDOW = 4
-    gammalist = []
-    gamma_grid_to_test = None
 
-    # FIX: Clarify index alignment
-    # We use parameters from periods [0, 1, ..., j-1] to backtest period j
-    # This avoids lookahead bias - we only use past information
-    start_index = max(1, len(list_of_periods) - GAMMA_CALCULATION_WINDOW)
+    print("Optimizing parameters (gamma, time_horizon) via global backtesting...")
+
+
+
+
+
+    # Determine start index (need at least one previous period for parameters)
+
+
+    start_index = 1
+
+
     period_index_range = range(start_index, len(list_of_periods))
 
+
+
+
+
+    # 1. Generate Grids
+
+
+    
+
+
+    # Representative parameters
+
+
+    rep_s = mid_price_df['mid_price'].median()
+
+
+    if pd.isna(rep_s):
+
+
+        rep_s = mid_price_df['mid_price'].iloc[-1]
+
+
+    
+
+
+    valid_sigmas = [s for s in sigma_list if pd.notna(s)]
+
+
+    rep_sigma = np.median(valid_sigmas) if valid_sigmas else 0.01
+
+
+            
+
+
+    all_k = [k for k in k_bid_list if pd.notna(k)] + [k for k in k_ask_list if pd.notna(k)]
+    rep_k = np.median(all_k) if all_k else 1.0
+            
+    gamma_grid = generate_gamma_grid(rep_s, rep_sigma, rep_k, H)
+    
+    if gamma_grid is None or len(gamma_grid) == 0:
+        print("Could not generate dynamic gamma grid. Using default grid.")
+        gamma_grid = np.logspace(-3, 1, 32)  # 0.001 to 10
+        
+    # Time Horizon Grid: Explore multiples of the analysis window H
+    # This represents the "urgency" to liquidate inventory
+    # Generate 10 time horizons logarithmically spaced from 0.1*H to 10*H
+    time_multipliers = np.geomspace(0.1, 10.0, 10)
+    time_horizon_grid = [H * m for m in time_multipliers]
+
+    print(f"Evaluating {len(gamma_grid)} gamma values x {len(time_horizon_grid)} time horizons across {len(period_index_range)} periods...")
+
+
+    
+
+
+    # Initialize PnL tracking for each (gamma, T) pair
+
+
+    # Keys are tuples: (gamma, time_horizon)
+
+
+    param_total_pnl = {}
+
+
+    param_valid_periods = {}
+
+
+    
+
+
+    for g in gamma_grid:
+
+
+        for t in time_horizon_grid:
+
+
+            param_total_pnl[(g, t)] = 0.0
+
+
+            param_valid_periods[(g, t)] = 0
+
+
+    
+
+
+    # 2. Iterate through all periods
+
+
     for j in period_index_range:
+
+
         # Get parameters from previous periods (avoid lookahead)
+
+
         if ma_window > 1:
-            # Use moving average of previous periods' parameters
+
+
             param_start = max(0, j - ma_window)
-            param_end = j  # Exclusive, so we use periods [param_start, j-1]
+
+
+            param_end = j
+
+
             
+
+
             a_bid_slice = A_bid_list[param_start:param_end]
+
+
             k_bid_slice = k_bid_list[param_start:param_end]
+
+
             a_ask_slice = A_ask_list[param_start:param_end]
+
+
             k_ask_slice = k_ask_list[param_start:param_end]
+
+
             
-            # Filter out NaN values before averaging
+
+
             A_bid = pd.Series(a_bid_slice).dropna().mean()
+
+
             k_bid = pd.Series(k_bid_slice).dropna().mean()
+
+
             A_ask = pd.Series(a_ask_slice).dropna().mean()
+
+
             k_ask = pd.Series(k_ask_slice).dropna().mean()
+
+
         else:
-            # Use parameters from immediately preceding period
+
+
             A_bid = A_bid_list[j - 1]
+
+
             k_bid = k_bid_list[j - 1]
+
+
             A_ask = A_ask_list[j - 1]
+
+
             k_ask = k_ask_list[j - 1]
 
-        # Use sigma from previous period to avoid lookahead
+
+
+
+
         sigma = sigma_list[j - 1] if j > 0 else sigma_list[0]
 
-        # Validate all parameters
+
+
+
+
         if pd.isna(sigma) or pd.isna(A_bid) or pd.isna(k_bid) or pd.isna(A_ask) or pd.isna(k_ask):
-            print(f"Period {j}: Missing parameters, skipping.")
-            gammalist.append(np.nan)
+
+
             continue
+
+
         
-        # FIX: Ensure k values are positive to avoid log(1 + gamma/k) issues
+
+
         if k_bid <= 0 or k_ask <= 0:
-            print(f"Period {j}: Invalid k values (k_bid={k_bid}, k_ask={k_ask}), skipping.")
-            gammalist.append(np.nan)
+
+
             continue
+
+
+
+
 
         period_start = list_of_periods[j]
-        period_end = period_start + pd.Timedelta(hours=H)
-        print(f"\nProcessing period {j}: {period_start} to {period_end}")
 
-        # Get mid-price data for this period
+
+        period_end = period_start + pd.Timedelta(hours=H)
+
+
+        
+
+
         mask = (mid_price_df.index >= period_start) & (mid_price_df.index < period_end)
+
+
         s_df = mid_price_df.loc[mask]
+
+
         s = s_df.resample('s').asfreq(fill_value=np.nan).ffill()['mid_price']
 
+
+
+
+
         if s.empty or len(s) < 10:
-            print(f"Period {j}: Insufficient price data, skipping.")
-            gammalist.append(np.nan)
+
+
             continue
 
-        # Generate gamma grid if not already done
-        if gamma_grid_to_test is None:
-            k_avg = (k_bid + k_ask) / 2.0
-            gamma_grid_to_test = generate_gamma_grid(s.iloc[-1], sigma, k_avg, H)
 
-        if gamma_grid_to_test is None or len(gamma_grid_to_test) == 0:
-            print("Could not find a reasonable gamma interval. Using default grid.")
-            gamma_grid_to_test = np.logspace(-3, 1, 32)  # 0.001 to 10
 
-        # Get trade data for this period
+
+
         buy_mask = (buy_trades.index >= period_start) & (buy_trades.index < period_end)
+
+
         buy_trades_period = buy_trades.loc[buy_mask]
+
+
         sell_mask = (sell_trades.index >= period_start) & (sell_trades.index < period_end)
+
+
         sell_trades_period = sell_trades.loc[sell_mask]
 
-        # Test each gamma value
-        gamma_results = []
-        for gamma_to_test in gamma_grid_to_test:
-            # FIX: Ensure gamma is above minimum threshold
-            gamma_to_test = max(gamma_to_test, MIN_GAMMA)
-            result = evaluate_gamma(gamma_to_test, s, buy_trades_period, sell_trades_period, 
-                                    k_bid, k_ask, sigma, H)
-            gamma_results.append(result)
 
-        results_df = pd.DataFrame(gamma_results, columns=['gamma', 'pnl', 'spread'])
-        valid_results = results_df.dropna(subset=['pnl'])
         
-        if valid_results.empty:
-            print("Warning: All backtests resulted in NaN PnL. Using fallback gamma.")
-            best_gamma = 0.5
-        else:
-            # Prefer gamma with positive PnL and maximum spread (more conservative)
-            positive_pnl_results = valid_results[valid_results['pnl'] > 0]
-            if not positive_pnl_results.empty:
-                best_gamma = positive_pnl_results.loc[positive_pnl_results['spread'].idxmax()]['gamma']
-            else:
-                # No profitable gamma found, use the one with least loss
-                best_gamma = valid_results.loc[valid_results['pnl'].idxmax()]['gamma']
-        
-        print(f"Best gamma for period: {best_gamma:.5f}")
-        gammalist.append(best_gamma)
-        
-    return gammalist
 
 
-def evaluate_gamma(gamma, mid_prices_period, buy_trades_period, sell_trades_period, 
-                   k_bid, k_ask, sigma, H):
-    """
-    Run backtest for a single gamma value and return results.
+        # Evaluate all parameter combinations for this period
+
+
+        for gamma in gamma_grid:
+
+
+            gamma_safe = max(gamma, MIN_GAMMA)
+
+
+            
+
+
+            for t_horizon in time_horizon_grid:
+
+
+                # Evaluate
+
+
+                res = evaluate_params(gamma_safe, t_horizon, s, buy_trades_period, sell_trades_period, 
+
+
+                                        k_bid, k_ask, sigma)
+
+
+                
+
+
+                pnl = res[1]
+
+
+                
+
+
+                # Treat 0.0 PnL as valid (no trades case)
+
+
+                if pd.notna(pnl):
+
+
+                    param_total_pnl[(gamma, t_horizon)] += pnl
+
+
+                    param_valid_periods[(gamma, t_horizon)] += 1
+
+
     
-    Returns: [gamma, final_pnl, spread_base]
+
+
+    print("\nBacktest complete.")
+
+
+    
+
+
+    # 3. Select Best Parameters
+
+
+    best_gamma = 0.05
+
+
+    best_time_horizon = H
+
+
+    best_pnl = -float('inf')
+
+
+    
+
+
+    valid_results_found = False
+
+
+    
+
+
+    for g in gamma_grid:
+
+
+        for t in time_horizon_grid:
+
+
+            if param_valid_periods[(g, t)] > 0:
+
+
+                pnl = param_total_pnl[(g, t)]
+
+
+                valid_results_found = True
+
+
+                
+
+
+                # Maximizing PnL
+
+
+                if pnl > best_pnl:
+
+
+                    best_pnl = pnl
+
+
+                    best_gamma = g
+
+
+                    best_time_horizon = t
+
+
+                # Tie-breaking: if PnL is identical (e.g. 0.0), prefer lower gamma (tighter spread)
+
+
+                # to encourage trading, and lower time horizon (less inventory risk sensitivity)
+
+
+                elif pnl == best_pnl:
+
+
+                    if g < best_gamma:
+
+
+                        best_gamma = g
+
+
+                        best_time_horizon = t
+
+
+    
+
+
+    if not valid_results_found:
+
+
+        print("Warning: No valid backtest results found. Using default parameters.")
+
+
+        return 0.05, H
+
+
+        
+
+
+    print(f"Optimal Parameters: Gamma={best_gamma:.6f}, T={best_time_horizon:.4f}h (Total PnL: {best_pnl:.4f})")
+
+
+    
+
+
+    return best_gamma, best_time_horizon
+
+
+
+
+
+
+
+
+def evaluate_params(gamma, time_horizon, mid_prices_period, buy_trades_period, sell_trades_period, 
+
+
+                   k_bid, k_ask, sigma):
+
+
     """
-    # FIX: Guard against invalid gamma
+
+
+    Run backtest for a single set of parameters.
+
+
+    """
+
+
     if gamma <= MIN_GAMMA:
-        return [round(gamma, 5), np.nan, np.nan]
-    
-    res = run_backtest(mid_prices_period, buy_trades_period, sell_trades_period, 
-                       gamma, k_bid, k_ask, sigma, H)
-    final_pnl = res['pnl'][-1]
-    
-    if not np.isfinite(final_pnl) or final_pnl == 0:
-        return [round(gamma, 5), np.nan, np.nan]
 
-    # Calculate spread for reporting
-    s_mean = mid_prices_period.mean()
-    sigma_abs_mean = sigma * s_mean
+
+        return [gamma, np.nan]
+
+
     
-    # Calculate average spread (total bid + ask spread)
-    risk_term = gamma * sigma_abs_mean**2.0 * 0.5
-    half_spread_bid = risk_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_bid))
-    half_spread_ask = risk_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_ask))
-    spread_base = half_spread_bid + half_spread_ask
+
+
+    res = run_backtest(mid_prices_period, buy_trades_period, sell_trades_period, 
+
+
+                       gamma, k_bid, k_ask, sigma, time_horizon)
+
+
+    final_pnl = res['pnl'][-1]
+
+
     
-    return [round(gamma, 5), final_pnl, spread_base]
+
+
+    if not np.isfinite(final_pnl):
+
+
+        return [gamma, np.nan]
+
+
+        
+
+
+    return [gamma, final_pnl]
+
+
+
+
 
 
 def generate_gamma_grid(s, sigma, k, H):
@@ -269,7 +588,7 @@ def find_workable_spread(initial_spread, spread_func, k, direction='up', factor=
 
 @jit(nopython=True, cache=True)
 def jit_backtest_loop(s_values, buy_max_values, sell_min_values, fee, 
-                      reservation_decay, half_spread_bid, half_spread_ask):
+                      reservation_decay, half_spread_bid, half_spread_ask, min_spread_pct):
     """
     Core JIT-compiled backtest loop.
     
@@ -294,8 +613,14 @@ def jit_backtest_loop(s_values, buy_max_values, sell_min_values, fee,
         r[i] = s_values[i] - q[i] * reservation_decay[i]
         
         # Calculate quotes centered around reservation price
-        r_a[i] = r[i] + half_spread_ask[i]
-        r_b[i] = r[i] - half_spread_bid[i]
+        raw_r_a = r[i] + half_spread_ask[i]
+        raw_r_b = r[i] - half_spread_bid[i]
+        
+        # Enforce minimum spread constraint relative to mid price
+        min_half_dist = s_values[i] * (min_spread_pct / 2.0)
+        
+        r_a[i] = max(raw_r_a, s_values[i] + min_half_dist)
+        r_b[i] = min(raw_r_b, s_values[i] - min_half_dist)
         
         spr[i] = r_a[i] - r_b[i]
         
@@ -324,9 +649,9 @@ def jit_backtest_loop(s_values, buy_max_values, sell_min_values, fee,
     return pnl, x, q, spr, r, r_a, r_b
 
 
-def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k_bid, k_ask, sigma, H, fee=0.00030):
+def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k_bid, k_ask, sigma, time_horizon, fee=0.00030, min_spread_pct=0.0004):
     """
-    Simulate the Avellaneda-Stoikov market making strategy.
+    Simulate the Avellaneda-Stoikov market making strategy with optimized parameters.
     
     Args:
         mid_prices: Series of mid-prices indexed by time
@@ -336,8 +661,9 @@ def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k_bid, k_ask, sigma
         k_bid: Order arrival intensity parameter for bid side
         k_ask: Order arrival intensity parameter for ask side
         sigma: Volatility (daily, as decimal)
-        H: Horizon in hours
+        time_horizon: Time horizon in HOURS (optimized fixed value)
         fee: Trading fee (default 3 bps)
+        min_spread_pct: Minimum total spread as a percentage (default 0.04%)
     
     Returns:
         Dictionary with PnL, cash, inventory, spread, and quote arrays
@@ -386,23 +712,15 @@ def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k_bid, k_ask, sigma
         return {'pnl': np.array([0]), 'x': np.array([0]), 'q': np.array([0]),
                 'spread': np.array([0]), 'r': np.array([0]), 'r_a': np.array([0]), 'r_b': np.array([0])}
     
-    T = H / 24.0  # Horizon in days
-    dt = T / N    # Time step
-    
-    # Prepare numpy arrays
-    s_values = mid_prices_aligned.values
-    buy_max_values = buy_max.values
-    sell_min_values = sell_min.values
-    
-    # Time remaining at each step
-    time_remaining = T - np.arange(N) * dt
-    time_remaining = np.maximum(time_remaining, 0)  # Ensure non-negative
-    
     # Convert percentage volatility to absolute volatility
-    sigma_abs = sigma * s_values
+    sigma_abs = sigma * mid_prices_aligned.values
     
-    # Avellaneda-Stoikov formulas
-    reservation_decay = gamma * sigma_abs**2.0 * time_remaining
+    # Avellaneda-Stoikov formulas with FIXED TIME HORIZON
+    # Instead of decaying time, we use a constant factor derived from the optimized time_horizon
+    time_factor_days = time_horizon / 24.0
+    
+    # reservation_decay is now constant w.r.t time (though varies with price via sigma_abs)
+    reservation_decay = gamma * sigma_abs**2.0 * time_factor_days
     risk_aversion_term = 0.5 * reservation_decay
     
     # Half-spreads (from reservation price to quotes)
@@ -411,8 +729,9 @@ def run_backtest(mid_prices, buy_trades, sell_trades, gamma, k_bid, k_ask, sigma
     
     # Run JIT-compiled simulation
     pnl, x, q, spr, r, r_a, r_b = jit_backtest_loop(
-        s_values, buy_max_values, sell_min_values, fee,
-        reservation_decay, half_spread_bid, half_spread_ask
+        mid_prices_aligned.values, buy_max.values, sell_min.values, fee,
+        reservation_decay, half_spread_bid, half_spread_ask,
+        min_spread_pct
     )
     
     return {'pnl': pnl, 'x': x, 'q': q, 'spread': spr, 'r': r, 'r_a': r_a, 'r_b': r_b}

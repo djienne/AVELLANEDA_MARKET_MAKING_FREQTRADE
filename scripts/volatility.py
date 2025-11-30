@@ -26,13 +26,17 @@ def calculate_garch_volatility(mid_price_df, H, list_of_periods):
     for i, period_start in enumerate(list_of_periods):
         period_end = period_start + pd.Timedelta(hours=H)
         
-        # Use data up to the current period for estimation
+        # Use all available data up to the end of the current period for estimation
+        # This includes the current period and all prior history as requested
         mask = mid_price_df.index <= period_end
         historical_data = mid_price_df.loc[mask]
         
         if len(historical_data) < 100:
             sigma_garch_list.append(np.nan)
             continue
+
+        if i == 0 or i == len(list_of_periods) - 1:
+             print(f"  Period {i}: GARCH training data: {historical_data.index.min()} to {historical_data.index.max()} ({len(historical_data)} obs)")
         
         # FIX: Use consistent return calculation (log returns)
         if USE_LOG_RETURNS:
@@ -96,6 +100,7 @@ def calculate_garch_volatility(mid_price_df, H, list_of_periods):
             if i == len(list_of_periods) - 1:
                 persistence = res.params.get('alpha[1]', 0) + res.params.get('beta[1]', 0)
                 print(f"\nGARCH Model Results for latest period:")
+                print(f"  Training Range: {historical_data.index.min()} to {historical_data.index.max()}")
                 print(f"  Omega (α₀): {res.params.get('omega', np.nan):.6f}")
                 print(f"  Alpha (α₁): {res.params.get('alpha[1]', np.nan):.6f}")
                 print(f"  Beta (β₁):  {res.params.get('beta[1]', np.nan):.6f}")
@@ -214,8 +219,8 @@ def calculate_volatility(mid_price_df, H, list_of_periods):
 
     num_periods = len(list_of_periods)
 
-    if num_periods < 10:
-        print("Fewer than 10 periods available, using rolling volatility only.")
+    if num_periods < 3:
+        print("Fewer than 3 periods available, using rolling volatility only.")
         final_sigma = calculate_rolling_volatility(mid_price_df, H, list_of_periods)
     else:
         # Calculate GARCH volatility
@@ -240,14 +245,29 @@ def calculate_volatility(mid_price_df, H, list_of_periods):
         
         print("\nCombining GARCH and rolling volatility...")
         for i, (g, r) in enumerate(zip(garch_sigma, rolling_sigma)):
+            use_garch = False
             if pd.notna(g) and g > 0:
+                # Check for significant divergence if rolling is also available
+                if pd.notna(r) and r > 0:
+                    if g > 2 * r or g < r / 2:
+                        # Divergence too high, prefer rolling
+                        use_garch = False
+                        if i >= num_periods - 3:
+                            print(f"  - Period {i}: GARCH ({g:.6f}) differs significantly from Rolling ({r:.6f}). Using Rolling.")
+                    else:
+                        use_garch = True
+                else:
+                    # Only GARCH available
+                    use_garch = True
+            
+            if use_garch:
                 final_sigma.append(g)
                 garch_used += 1
             elif pd.notna(r) and r > 0:
                 final_sigma.append(r)
                 rolling_used += 1
-                if i >= num_periods - 3:  # Only print for recent periods
-                    print(f"  - Period {i}: GARCH failed, using rolling value: {r:.6f}")
+                if i >= num_periods - 3 and not (pd.notna(g) and g > 0): # Only log if it wasn't a divergence case (already logged)
+                    print(f"  - Period {i}: GARCH failed/invalid, using rolling value: {r:.6f}")
             else:
                 final_sigma.append(np.nan)
                 if i >= num_periods - 3:

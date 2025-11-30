@@ -18,7 +18,7 @@ print("DEBUG: Imports finished", flush=True)
 from utils import get_tick_size, load_trades_data, load_effective_mid_price
 from volatility import calculate_volatility
 from intensity import calculate_intensity_params
-from backtest import optimize_gamma
+from backtest import optimize_params
 
 
 def parse_arguments():
@@ -60,14 +60,19 @@ def get_smoothed_parameters(param_list, ma_window, use_last_n=None):
     return np.mean(valid_values)
 
 
-def calculate_final_quotes(gamma, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_price_df, ma_window, ticker):
+def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_price_df, ma_window, ticker):
     """Calculate the final reservation price and quotes."""
     print("\n" + "-"*20)
     print("Calculating final parameters for current state...")
     
     s = mid_price_df['mid_price'].iloc[-1]
-    time_remaining = H / 24.0
-    q = 1.0  # Placeholder for current inventory
+    
+    # Use the optimized fixed time horizon for risk calculation
+    # This represents the "urgency" factor in the model
+    time_remaining = time_horizon / 24.0
+    
+    # Set inventory to 0 for neutral pricing as requested
+    q = 0.0 
 
     # Convert percentage volatility to absolute volatility (in $)
     sigma_abs = sigma * s
@@ -86,6 +91,19 @@ def calculate_final_quotes(gamma, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_pric
     r_a = r + half_spread_ask
     r_b = r - half_spread_bid
     
+    # SAFETY: Enforce minimum distance from mid price to avoid negative deltas
+    # Total minimum spread 0.04%, so 0.02% per side
+    MIN_SPREAD_PCT = 0.0004
+    min_half_spread = s * (MIN_SPREAD_PCT / 2.0)
+    
+    if r_a < s + min_half_spread:
+        print(f"Safety: Ask Price too aggressive (Delta < {MIN_SPREAD_PCT/2*100:.3f}%). Clamping to minimum.")
+        r_a = s + min_half_spread
+        
+    if r_b > s - min_half_spread:
+        print(f"Safety: Bid Price too aggressive (Delta < {MIN_SPREAD_PCT/2*100:.3f}%). Clamping to minimum.")
+        r_b = s - min_half_spread
+    
     # Calculate deltas relative to mid price
     delta_a = r_a - s
     delta_b = s - r_b
@@ -99,11 +117,14 @@ def calculate_final_quotes(gamma, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_pric
             "A_bid": float(A_bid), "k_bid": float(k_bid),
             "A_ask": float(A_ask), "k_ask": float(k_ask)
         },
-        "optimal_parameters": {"gamma": float(gamma)},
+        "optimal_parameters": {
+            "gamma": float(gamma),
+            "time_horizon_hours": float(time_horizon)
+        },
         "current_state": {
-            "time_remaining": float(time_remaining), 
+            "time_remaining_days_fixed": float(time_remaining), 
             "inventory": int(q), 
-            "hours_window": H, 
+            "analysis_window_hours": H, 
             "ma_window": ma_window
         },
         "calculated_values": {
@@ -136,7 +157,7 @@ def print_summary(results, list_of_periods, script_dir):
         return
 
     TICKER = results['ticker']
-    H = results['current_state']['hours_window']
+    H = results['current_state']['analysis_window_hours']
     ma_window = results['current_state']['ma_window']
     
     print("\n" + "="*80)
@@ -157,9 +178,9 @@ def print_summary(results, list_of_periods, script_dir):
     print(f"   Intensity Ask (A_ask, k_ask):     A={results['market_data']['A_ask']:.4f}, k={results['market_data']['k_ask']:.6f}")
     print(f"\nOptimal Parameters:")
     print(f"   Risk Aversion (gamma): {results['optimal_parameters']['gamma']:.6f}")
+    print(f"   Time Horizon (T):      {results['optimal_parameters']['time_horizon_hours']:.4f} hours")
     print(f"\nCurrent State:")
-    print(f"   Time Remaining:        {results['current_state']['time_remaining']:.4f} (in days)")
-    print(f"   Inventory (q):         {results['current_state']['inventory']:.4f}")
+    print(f"   Inventory (q):         {results['current_state']['inventory']:.4f} (Forced to 0)")
     print(f"\nCalculated Prices:")
     print(f"   Reservation Price:     ${results['calculated_values']['reservation_price']:.4f}")
     print(f"   Ask Price:             ${results['limit_orders']['ask_price']:.4f}")
@@ -274,23 +295,15 @@ def main():
         print_summary({}, list_of_periods, script_dir)
         sys.exit()
 
-    gammalist = optimize_gamma(
+    gamma, time_horizon = optimize_params(
         list_of_periods, sigma_list, A_bid_list, k_bid_list, A_ask_list, k_ask_list,
         H, ma_window, mid_price_df, buy_trades, sell_trades, tick_size
     )
 
-    # FIX: Consistent parameter selection for final calculation
-    # Use the most recent values, applying MA smoothing if configured
-    
-    # Gamma
-    if len(gammalist) > 0:
-        gamma = get_smoothed_parameters(gammalist, ma_window)
-        if pd.isna(gamma):
-            # Fallback: try to get any valid value
-            valid_gammas = [g for g in gammalist if pd.notna(g)]
-            gamma = valid_gammas[-1] if valid_gammas else 0.1
-    else:
-        gamma = 0.1
+    if pd.isna(gamma):
+        gamma = 0.05
+    if pd.isna(time_horizon):
+        time_horizon = H
     
     # Intensity parameters
     # FIX: Use the most recent values, not second-to-last
@@ -332,7 +345,7 @@ def main():
         print(f"Warning: Using fallback sigma={sigma}")
 
     # Calculate and display results
-    results = calculate_final_quotes(gamma, sigma, A_bid, k_bid, A_ask, k_ask, 
+    results = calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, 
                                      H, mid_price_df, ma_window, TICKER)
     print_summary(results, list_of_periods, script_dir)
 

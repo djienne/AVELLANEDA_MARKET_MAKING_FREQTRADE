@@ -93,26 +93,6 @@ def calculate_optimal_spreads(mid_price,sigma,k_bid,k_ask,gamma,time_remaining,q
 
     return r_b, r_a
 
-def fraction_of_day_remaining_utc():
-    # Get current UTC time
-    now_utc = datetime.now(timezone.utc)
-    
-    # Get end of day (midnight) in UTC
-    end_of_day = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
-    # Or more precisely, start of next day:
-    # end_of_day = (now_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Calculate total seconds in a day
-    total_seconds_in_day = 24 * 60 * 60
-    
-    # Calculate seconds remaining
-    seconds_remaining = (end_of_day - now_utc).total_seconds()
-    
-    # Calculate fraction remaining
-    fraction_remaining = seconds_remaining / total_seconds_in_day
-    
-    return fraction_remaining
-
 #---------------------------------------------------------- LOAD CONFIG ----------------------------------------------------------
 
 def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
@@ -223,6 +203,7 @@ class avellaneda(IStrategy):
     k_bid = None
     k_ask = None
     sigma = None
+    time_horizon_hours = None
 
     fees_HL_maker = 0.02/100.0
 
@@ -268,6 +249,8 @@ class avellaneda(IStrategy):
         self.k_bid = self.params_MM['market_data'].get('k_bid', self.params_MM['market_data'].get('k'))
         self.k_ask = self.params_MM['market_data'].get('k_ask', self.params_MM['market_data'].get('k'))
         self.sigma = self.params_MM['market_data']['sigma']
+        # Default to 0.5 hours if not present in older JSONs
+        self.time_horizon_hours = self.params_MM['optimal_parameters'].get('time_horizon_hours', 0.5)
         
 
     def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
@@ -290,6 +273,7 @@ class avellaneda(IStrategy):
         self.k_bid = self.params_MM['market_data'].get('k_bid', self.params_MM['market_data'].get('k'))
         self.k_ask = self.params_MM['market_data'].get('k_ask', self.params_MM['market_data'].get('k'))
         self.sigma = self.params_MM['market_data']['sigma']
+        self.time_horizon_hours = self.params_MM['optimal_parameters'].get('time_horizon_hours', 0.5)
 
     def informative_pairs(self):
         """
@@ -361,7 +345,7 @@ class avellaneda(IStrategy):
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
         q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy
 
@@ -381,7 +365,7 @@ class avellaneda(IStrategy):
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
         q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_sell
 
@@ -401,7 +385,7 @@ class avellaneda(IStrategy):
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
         q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,fraction_of_day_remaining_utc(),q_inventory_exposure,self.fees_HL_maker)
+        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy
 
