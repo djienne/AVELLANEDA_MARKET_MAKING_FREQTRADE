@@ -102,10 +102,6 @@ HL_data/
 - `bid_price_{i}`, `bid_size_{i}`: Bid levels 0-19 (float)
 - `ask_price_{i}`, `ask_size_{i}`: Ask levels 0-19 (float)
 
-## Avellaneda-Stoikov Parameter Calculation
+## Notes
 
-*Note: The script `calculate_avellaneda_parameters.py` is currently pending implementation.*
-
-This script will calculate optimal market making parameters using the Avellaneda-Stoikov model. It analyzes historical trade and price data to estimate volatility (sigma) and order arrival intensity (A, k). It then backtests different risk aversion (gamma) values to find the optimal parameter that maximizes profitability while managing inventory risk.
-
-`avellaneda_parameters_BTC.json`: This file stores the output of the calculation for a specific ticker (e.g., BTC). It includes key market data (mid-price, sigma, A, k), the optimized gamma, and the resulting reservation price and optimal bid/ask quotes. This provides a snapshot of the recommended market making parameters.
+The collected data can be used for market analysis, strategy backtesting, and parameter optimization. Parameter calculation and strategy implementation are handled in separate modules.

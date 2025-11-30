@@ -9,12 +9,14 @@ Reliable `σ` (volatility), `κ` (order flow intensity), and `γ` (risk aversion
 The system is designed to be self-sufficient:
 1.  Run `docker-compose build` and `docker-compose up` to start both data collection and trading.
 2.  Initially, the trading bot will use inaccurate parameters.
-3.  The Avellaneda parameter sets are automatically recalculated every **4 hours**. After a couple of days, the parameters will become more reliable.
+3.  The Avellaneda parameter sets are automatically recalculated **at most once every 4 hours** (rate-limited). The strategy triggers recalculation every 10 bot loops, but execution is throttled to prevent running more frequently than once per 4-hour window. After a couple of days, the parameters will become more reliable.
 4.  You can either let the system run continuously or, for a fresh start with better parameters, stop the services (`docker-compose down`), delete the `tradesv3.sqlite` database, and restart (`docker-compose up`).
 
 ## Overview
 
-This project implements an advanced market making strategy that defaults to PAXG/USDC on Hyperliquid, dynamically calculating optimal bid-ask spreads using the Avellaneda-Stoikov model with real-time parameter estimation.
+This project implements an advanced market making strategy for Hyperliquid, dynamically calculating optimal bid-ask spreads using the Avellaneda-Stoikov model with real-time parameter estimation.
+
+**Current Configuration:** The included configuration is set to trade PAXG/USDC. The system includes pre-calculated parameters for three trading pairs: PAXG, BTC, and ETH. To switch trading pairs, update both `user_data/config.json` (exchange.pair_whitelist) and ensure the corresponding parameter file exists in `scripts/` (see "Switching Trading Pairs" below).
 
 ## Project Structure
 
@@ -28,7 +30,12 @@ ADVANCED_MM/
 │   └── [other standard freqtrade dirs] # backtest_results/, data/, logs/, etc.
 ├── scripts/
 │   ├── calculate_avellaneda_parameters.py # Unified parameter calculation
-│   ├── avellaneda_parameters_PAXG.json # Current model parameters (PAXG)
+│   ├── avellaneda_parameters_PAXG.json # Pre-calculated parameters for PAXG
+│   ├── avellaneda_parameters_BTC.json  # Pre-calculated parameters for BTC
+│   ├── avellaneda_parameters_ETH.json  # Pre-calculated parameters for ETH
+│   ├── backtest.py                   # Backtesting for parameter optimization
+│   ├── volatility.py                 # Volatility calculation (GARCH model)
+│   ├── intensity.py                  # Order flow intensity estimation (MLE)
 │   ├── Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook
 │   └── requirements.txt              # Python dependencies
 ├── HL_data_collector/
@@ -66,6 +73,38 @@ The main configuration for the Freqtrade bot is in the `user_data/config.json` f
 *   `"exchange.name": "hyperliquid"`: The exchange to trade on.
 *   `"exchange.pair_whitelist": ["PAXG/USDC:USDC"]`: The trading pair to use.
 
+## Switching Trading Pairs
+
+The system includes pre-calculated Avellaneda parameters for three trading pairs: **PAXG**, **BTC**, and **ETH**.
+
+**To switch to a different trading pair:**
+
+1. **Update the configuration file** (`user_data/config.json`):
+   - Modify `"exchange.pair_whitelist"` to your desired pair (e.g., `["ETH/USDC:USDC"]` or `["BTC/USDC:USDC"]`)
+
+2. **Update the strategy file** (`user_data/strategies/avellaneda.py`):
+   - Locate the parameter file loading section (around line 131-135)
+   - Change the filename from `avellaneda_parameters_PAXG.json` to match your pair:
+     - For BTC: `avellaneda_parameters_BTC.json`
+     - For ETH: `avellaneda_parameters_ETH.json`
+
+3. **Ensure the data collector is configured** for your pair:
+   - The `HL_data_collector` service should already collect data for ETH and PAXG by default
+   - To add other pairs, modify the `SYMBOLS` environment variable in `docker-compose.yml` (line 41)
+
+4. **Restart the services**:
+   ```bash
+   docker-compose down
+   docker-compose up
+   ```
+
+**Note:** When the parameter calculation script runs (by default, it uses ETH), you may want to manually run it for your chosen pair:
+```bash
+python scripts/calculate_avellaneda_parameters.py BTC  # or ETH, or PAXG
+```
+
+**Alternative Configuration:** A `user_data/config_short.json` file is also available for short-selling strategies (currently disabled in docker-compose.yml).
+
 ## Mathematical Foundation
 
 ### Avellaneda-Stoikov Market Making Model
@@ -77,13 +116,13 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 The bid/ask spread is defined as:
 
 ```
-spread = γ·σ²·(T-t) + (2/γ)·ln(1 + γ/κ)
+spread = γ·σ²·T + (2/γ)·ln(1 + γ/κ)
 ``` 
 
 This spread is centered around a reservation price `r`, which is the price at which a market maker is indifferent to buying or selling another share.
 
 ```
-reservation price = r = s - q·γ·σ²·(T-t)
+reservation price = r = s - q·γ·σ²·T
 ``` 
 
 ```
@@ -94,9 +133,9 @@ Where:
 - `s`: mid-price of the asset
 - `σ`: volatility of the asset
 - `κ`: intensity of the arrival of orders
-- `γ`: risk factor
-- `T-t`: time horizon (fraction of the trading period remaining)
-- `q`: number of assets held in inventory
+- `γ`: risk factor, optimized via backtests over the entire historical data, alongside the time horizon.
+- `T`: optimized fixed time horizon (in hours), representing the urgency to liquidate inventory.
+- `q`: number of assets held in inventory (forced to 0 for neutral pricing).
 
 And the final best buy and sell limit order prices:
 
@@ -121,9 +160,17 @@ If r < s:
 
 ### Parameter Estimation
 
-Parameters are recalculated every 4 hours:
-- **γ (Risk Aversion):** Optimized via backtests
-- **κ (Order Flow Intensity):** Exponential decay model fitting
+Parameters are recalculated automatically, rate-limited to **at most once every 4 hours**:
+
+**Recalculation Mechanism:**
+- The strategy attempts to trigger recalculation every 10 bot loops (~150 minutes with 15-minute timeframe)
+- A lock file (`.avellaneda_last_run.json`) prevents execution if parameters were calculated within the last 4 hours
+- This ensures parameters update regularly while preventing excessive computation
+
+**Parameter Calculations:**
+- **γ (Risk Aversion):** Optimized via backtests over the entire historical data, alongside the time horizon.
+- **T (Time Horizon):** Optimized via backtests over the entire historical data, alongside the risk aversion parameter.
+- **κ (Order Flow Intensity):** Estimated using Maximum Likelihood Estimation (MLE) on raw fill counts for robustness.
 - **σ (Volatility):** Calculated using a GARCH(1,1) model to capture volatility clustering. A rolling window standard deviation of price movements is used as a fallback if the GARCH model fails or if there is insufficient data.
 
 ## Disclaimer

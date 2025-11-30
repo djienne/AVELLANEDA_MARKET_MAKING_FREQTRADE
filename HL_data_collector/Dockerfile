@@ -11,9 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Python deps – hyperliquid relies on websockets, etc.
+# Python deps – hyperliquid relies on websocket-client, etc.
 RUN pip install --no-cache-dir \
     hyperliquid-python-sdk \
+    websocket-client \
     websockets \
     pandas \
     pyarrow
