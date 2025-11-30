@@ -1,6 +1,7 @@
 # Log files
 user_data/logs/
 *.log
+*.log.*
 
 # Python
 __pycache__/
