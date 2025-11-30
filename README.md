@@ -9,7 +9,7 @@ Reliable sigma (volatility), k (order flow intensity), and gamma (risk aversion)
 The system is designed to be self-sufficient:
 1. Run `docker-compose build` and `docker-compose up` to start both data collection and trading.
 2. Initially, the trading bot will use inaccurate parameters.
-3. The Avellaneda parameter sets are automatically recalculated **at most once every 15 minutes** (rate-limited). The strategy triggers recalculation every 10 bot loops (~150 minutes with a 15-minute timeframe), and a lock file prevents running more frequently than once per 15 minutes. After a couple of days, the parameters will become more reliable.
+3. The Avellaneda parameter sets are automatically recalculated **at most once every 15 minutes** (rate-limited). The strategy triggers recalculation every 10 bot loops (~150 seconds with a 15 seconds `process_throttle_secs`), and a lock file prevents running more frequently than once per 15 minutes. After a couple of days, the parameters will become more reliable.
 4. You can either let the system run continuously or, for a fresh start with better parameters, stop the services (`docker-compose down`), delete the `tradesv3.sqlite` database, and restart (`docker-compose up`).
 
 ## Overview
