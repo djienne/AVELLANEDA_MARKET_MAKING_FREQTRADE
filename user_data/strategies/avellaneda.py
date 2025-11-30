@@ -393,24 +393,6 @@ class avellaneda(IStrategy):
             return (best_bid + best_ask) / 2
         else:
             return fallback_rate
-
-    def custom_stake_amount(self, pair: str, current_time: datetime, current_rate: float,
-                            proposed_stake: float, min_stake: float | None, max_stake: float,
-                            leverage: float, entry_tag: str | None, side: str,
-                            **kwargs) -> float:
-        # Use maximum stake amount reduced by a small dust
-        open_count = Trade.get_open_trade_count()
-
-        dust_USDC = 0.9
-        
-        returned_val = max_stake - dust_USDC
-
-        if leverage!=1:
-            logger.info("ERROR: Leverage must be 1. Something went wrong. ABORTING.")
-            sys.exit()
-
-        logger.info(f"Using stake amount for {pair} : {returned_val}")
-        return returned_val
      
     def custom_entry_price(self, pair: str, current_time: datetime, proposed_rate: float,
                            entry_tag: str, side: str, **kwargs) -> float:

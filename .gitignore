@@ -6,6 +6,7 @@ user_data/logs/
 # Data files
 HL_data/
 HL_data_collector/HL_data/
+user_data/tradesv3.sqlite*
 
 # Python
 __pycache__/
