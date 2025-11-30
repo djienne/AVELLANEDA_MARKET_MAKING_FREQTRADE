@@ -60,7 +60,7 @@ def get_smoothed_parameters(param_list, ma_window, use_last_n=None):
     return np.mean(valid_values)
 
 
-def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_price_df, ma_window, ticker):
+def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_price_df, ma_window, ticker, num_periods):
     """Calculate the final reservation price and quotes."""
     print("\n" + "-"*20)
     print("Calculating final parameters for current state...")
@@ -112,8 +112,8 @@ def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_as
         "ticker": ticker,
         "timestamp": pd.Timestamp.now().isoformat(),
         "market_data": {
-            "mid_price": float(s), 
-            "sigma": float(sigma), 
+            "mid_price": float(s),
+            "sigma": float(sigma),
             "A_bid": float(A_bid), "k_bid": float(k_bid),
             "A_ask": float(A_ask), "k_ask": float(k_ask)
         },
@@ -122,10 +122,11 @@ def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_as
             "time_horizon_hours": float(time_horizon)
         },
         "current_state": {
-            "time_remaining_days_fixed": float(time_remaining), 
-            "inventory": int(q), 
-            "analysis_window_hours": H, 
-            "ma_window": ma_window
+            "time_remaining_days_fixed": float(time_remaining),
+            "inventory": int(q),
+            "analysis_window_hours": H,
+            "ma_window": ma_window,
+            "num_data_periods": int(num_periods)
         },
         "calculated_values": {
             "reservation_price": float(r), 
@@ -145,7 +146,52 @@ def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_as
     }
 
 
-def print_summary(results, list_of_periods, script_dir):
+def get_output_directory():
+    """
+    Get the output directory for parameter JSON files.
+    Uses environment variable AVELLANEDA_PARAMS_DIR if set, otherwise defaults to scripts/ directory.
+    Works consistently whether running locally, in Docker, or in a container.
+
+    Returns:
+        Path: Directory where parameter files should be written
+    """
+    # First check environment variable
+    env_path = os.getenv('AVELLANEDA_PARAMS_DIR')
+    if env_path:
+        output_dir = Path(env_path).resolve()
+        print(f"Using output directory from AVELLANEDA_PARAMS_DIR: {output_dir}")
+        return output_dir
+
+    # Fall back to scripts directory relative to project root
+    # Try to find project root by looking for marker files
+    current_file = Path(__file__).resolve()
+    current_dir = current_file.parent
+
+    # If we're in scripts/ directory, use it directly
+    if current_dir.name == 'scripts':
+        output_dir = current_dir
+    else:
+        # Search for scripts directory
+        search_paths = [
+            current_dir / 'scripts',
+            current_dir.parent / 'scripts',
+            current_dir.parent.parent / 'scripts',
+        ]
+
+        for path in search_paths:
+            if path.exists() and path.is_dir():
+                output_dir = path
+                break
+        else:
+            # If scripts/ not found, use current directory
+            output_dir = current_dir
+            print(f"Warning: scripts/ directory not found, using {output_dir}")
+
+    print(f"Using default output directory: {output_dir}")
+    return output_dir
+
+
+def print_summary(results, list_of_periods, output_dir=None):
     """Print a summary of the results to the terminal."""
     if not results:
         print("\n" + "="*80)
@@ -159,12 +205,14 @@ def print_summary(results, list_of_periods, script_dir):
     TICKER = results['ticker']
     H = results['current_state']['analysis_window_hours']
     ma_window = results['current_state']['ma_window']
-    
+    num_periods = results['current_state']['num_data_periods']
+
     print("\n" + "="*80)
     print(f"AVELLANEDA-STOIKOV MARKET MAKING PARAMETERS - {TICKER}")
     print(f"Analysis Period: {H * 60:.1f} minutes ({H:.4f} hours)")
     if ma_window > 1:
         print(f"Moving Average Window: {ma_window} periods")
+    print(f"Number of Data Periods: {num_periods}")
     print("="*80)
 
     if len(list_of_periods) <= 1:
@@ -189,8 +237,16 @@ def print_summary(results, list_of_periods, script_dir):
     print(f"   Delta Ask:             ${results['limit_orders']['delta_a']:.6f} ({results['limit_orders']['delta_a_percent']:.6f}%)")
     print(f"   Delta Bid:             ${results['limit_orders']['delta_b']:.6f} ({results['limit_orders']['delta_b_percent']:.6f}%)")
     print(f"   Total Spread:          {(results['limit_orders']['delta_a_percent'] + results['limit_orders']['delta_b_percent']):.4f}%")
-    
-    json_filename = script_dir / f"avellaneda_parameters_{TICKER}.json"
+
+    # Use provided output_dir or get it from environment/default
+    if output_dir is None:
+        output_dir = get_output_directory()
+
+    # Ensure output directory exists
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    json_filename = output_dir / f"avellaneda_parameters_{TICKER}.json"
     with open(json_filename, 'w') as f:
         json.dump(results, f, indent=4)
     print(f"\nResults saved to: {json_filename}")
@@ -203,7 +259,7 @@ def main():
     TICKER = args.ticker
     N_minutes = args.minutes
     H = N_minutes / 60.0
-    
+
     # Determine MA window based on analysis period
     if H <= 8:
         ma_window = 3
@@ -220,17 +276,21 @@ def main():
 
     tick_size = get_tick_size(TICKER)
     delta_list = np.arange(tick_size, 50.0 * tick_size, tick_size)
-    
+
     # Determine paths
     script_path = Path(__file__).resolve()
     script_dir = script_path.parent
     project_root = script_dir.parent
-    
+
+    # Get output directory for parameter files (consistent across environments)
+    output_dir = get_output_directory()
+
     default_data_dir = project_root / 'HL_data_collector' / 'HL_data'
-    
+
     print(f"Script directory: {script_dir}")
     print(f"Project root: {project_root}")
-    
+    print(f"Output directory: {output_dir}")
+
     HL_DATA_DIR = os.getenv('HL_DATA_LOC', str(default_data_dir))
     print(f"Data directory: {HL_DATA_DIR}")
     
@@ -292,7 +352,7 @@ def main():
     )
     
     if len(list_of_periods) <= 1:
-        print_summary({}, list_of_periods, script_dir)
+        print_summary({}, list_of_periods, output_dir)
         sys.exit()
 
     gamma, time_horizon = optimize_params(
@@ -345,9 +405,9 @@ def main():
         print(f"Warning: Using fallback sigma={sigma}")
 
     # Calculate and display results
-    results = calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, 
-                                     H, mid_price_df, ma_window, TICKER)
-    print_summary(results, list_of_periods, script_dir)
+    results = calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask,
+                                     H, mid_price_df, ma_window, TICKER, len(list_of_periods))
+    print_summary(results, list_of_periods, output_dir)
 
 
 if __name__ == "__main__":

@@ -95,6 +95,50 @@ def calculate_optimal_spreads(mid_price,sigma,k_bid,k_ask,gamma,time_remaining,q
 
 #---------------------------------------------------------- LOAD CONFIG ----------------------------------------------------------
 
+def get_params_directory():
+    """
+    Get the directory containing parameter JSON files.
+    Uses environment variable AVELLANEDA_PARAMS_DIR if set, otherwise searches for scripts/ directory.
+    Works consistently whether running locally, in Docker, or in a container.
+
+    Returns:
+        Path: Directory where parameter files are located
+    """
+    import os
+
+    # First check environment variable
+    env_path = os.getenv('AVELLANEDA_PARAMS_DIR')
+    if env_path:
+        params_dir = Path(env_path).resolve()
+        logger.info(f"Using params directory from AVELLANEDA_PARAMS_DIR: {params_dir}")
+        return params_dir
+
+    # Fall back to scripts directory relative to project root
+    try:
+        current_file = Path(__file__).resolve()
+        current_dir = current_file.parent
+    except NameError:  # e.g., interactive
+        current_dir = Path(sys.argv[0]).resolve().parent if sys.argv and sys.argv[0] else Path.cwd()
+
+    # Search for scripts directory
+    search_paths = [
+        current_dir / '../../scripts',  # From user_data/strategies/
+        current_dir / '../scripts',
+        current_dir / 'scripts',
+        current_dir.parent.parent / 'scripts',
+    ]
+
+    for path in search_paths:
+        resolved = path.resolve()
+        if resolved.exists() and resolved.is_dir():
+            logger.info(f"Using params directory: {resolved}")
+            return resolved
+
+    # If scripts/ not found, use current directory as fallback
+    logger.warning(f"scripts/ directory not found, using current directory: {current_dir}")
+    return current_dir
+
+
 def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
     p = start.resolve()
     for _ in range(max_up + 1):
@@ -109,17 +153,36 @@ def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
 def load_configs(start_dir: Path | None = None, max_up: int = 10):
     """
     Load Avellaneda parameters from JSON file, searching in multiple locations.
-    
+
     Args:
         start_dir: Starting directory for search (defaults to current file's directory)
         max_up: Maximum levels to search upwards
-        
+
     Returns:
         dict: Loaded parameters from JSON file
-        
+
     Raises:
         FileNotFoundError: If the parameters file cannot be found
     """
+    # Get the parameter directory (consistent across environments)
+    params_dir = get_params_directory()
+
+    # Get the current pair from config if available
+    # Default to PAXG if not available
+    param_file_name = "avellaneda_parameters_PAXG.json"
+
+    # Try to load from the params directory
+    params_file = params_dir / param_file_name
+
+    if params_file.exists():
+        try:
+            params_MM = json.loads(params_file.read_text(encoding="utf-8"))
+            logger.info(f"Successfully loaded parameters from: {params_file}")
+            return params_MM
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error reading {params_file}: {e}")
+
+    # Fallback: try legacy search locations for backward compatibility
     if start_dir is None:
         try:
             start_dir = Path(__file__).resolve().parent
@@ -134,17 +197,17 @@ def load_configs(start_dir: Path | None = None, max_up: int = 10):
         "../scripts/avellaneda_parameters_PAXG.json",  # One level up then scripts
         "../../scripts/avellaneda_parameters_PAXG.json"  # Two levels up then scripts
     ]
-    
+
     # First try to find the file using the existing upward search for each location
     for location in search_locations:
         try:
-            params_file = find_upwards(location, start_dir, max_up)
-            params_MM = json.loads(params_file.read_text(encoding="utf-8"))
-            print(f"Successfully loaded parameters from: {params_file}")
+            params_file_found = find_upwards(location, start_dir, max_up)
+            params_MM = json.loads(params_file_found.read_text(encoding="utf-8"))
+            logger.info(f"Successfully loaded parameters from: {params_file_found}")
             return params_MM
         except FileNotFoundError:
             continue
-    
+
     # If upward search fails, try direct relative paths from start directory
     for location in search_locations:
         try:
@@ -152,29 +215,30 @@ def load_configs(start_dir: Path | None = None, max_up: int = 10):
             params_path = start_dir / location
             if params_path.exists():
                 params_MM = json.loads(params_path.read_text(encoding="utf-8"))
-                print(f"Successfully loaded parameters from: {params_path}")
+                logger.info(f"Successfully loaded parameters from: {params_path}")
                 return params_MM
-                
+
             # Try relative to project root (go up to find project root)
             current = start_dir
             for _ in range(max_up):
                 potential_root = current / location
                 if potential_root.exists():
                     params_MM = json.loads(potential_root.read_text(encoding="utf-8"))
-                    print(f"Successfully loaded parameters from: {potential_root}")
+                    logger.info(f"Successfully loaded parameters from: {potential_root}")
                     return params_MM
                 if current.parent == current:
                     break
                 current = current.parent
-                
+
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Error reading {location}: {e}")
+            logger.error(f"Error reading {location}: {e}")
             continue
-    
+
     # If all attempts fail, provide helpful error message
     raise FileNotFoundError(
         f"Could not find 'avellaneda_parameters_PAXG.json' in any of these locations:\n"
-        f"  - {chr(10).join([str(start_dir / loc) for loc in search_locations])}\n"
+        f"  - Primary: {params_file}\n"
+        f"  - Fallback: {chr(10).join([str(start_dir / loc) for loc in search_locations])}\n"
         f"Please ensure the file exists and is accessible."
     )
 
@@ -193,6 +257,9 @@ class avellaneda(IStrategy):
     position_adjustment_enable: bool = False
     max_entry_position_adjustment = 0
     startup_candle_count: int = 0
+
+    # Minimum number of data collection periods required before trading
+    min_data_periods: int = 3
     
     minimal_roi = {
         "0": -1
@@ -251,6 +318,13 @@ class avellaneda(IStrategy):
         self.sigma = self.params_MM['market_data']['sigma']
         # Default to 0.5 hours if not present in older JSONs
         self.time_horizon_hours = self.params_MM['optimal_parameters'].get('time_horizon_hours', 0.5)
+
+        # Check if we have sufficient data periods
+        num_periods = self.params_MM.get('current_state', {}).get('num_data_periods', 0)
+        if num_periods < self.min_data_periods:
+            logger.warning(f"Insufficient data collected: {num_periods}/{self.min_data_periods} periods. Trading will be disabled until more data is collected.")
+        else:
+            logger.info(f"Sufficient data available: {num_periods} periods collected.")
         
 
     def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
@@ -287,9 +361,17 @@ class avellaneda(IStrategy):
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
+        Only allow entry if we have sufficient data collected by the data collector.
         """
+        # Check if parameters are loaded and we have enough collected data periods
         if self.params_MM is not None and self.sigma is not None:
-            dataframe.loc[:, 'enter_long'] = 1
+            # Check if we have enough data periods from the data collector
+            num_periods = self.params_MM.get('current_state', {}).get('num_data_periods', 0)
+            if num_periods >= self.min_data_periods:
+                dataframe.loc[:, 'enter_long'] = 1
+            else:
+                logger.warning(f"Insufficient data periods: {num_periods}/{self.min_data_periods}. Waiting for more data collection.")
+                dataframe.loc[:, 'enter_long'] = 0
         else:
             dataframe.loc[:, 'enter_long'] = 0
         return dataframe

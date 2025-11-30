@@ -1,33 +1,38 @@
 {
     "ticker": "PAXG",
-    "timestamp": "2025-10-10T16:39:36.519484",
+    "timestamp": "2025-12-01T00:18:50.465030",
     "market_data": {
-        "mid_price": 4005.4,
-        "sigma": 0.002749258171442251,
-        "A": 0.07431282827437852,
-        "k": 0.05486100671464608
+        "mid_price": 4236.049999999999,
+        "sigma": 0.005880665960276928,
+        "A_bid": 0.08248373769056777,
+        "k_bid": 0.8662026967454786,
+        "A_ask": 0.05558947751411605,
+        "k_ask": 0.6249617852255015
     },
     "optimal_parameters": {
-        "gamma": 0.5192833333333332
+        "gamma": 6.853334714467975,
+        "time_horizon_hours": 0.0695639850551781
     },
     "current_state": {
-        "time_remaining": 0.16666666666666666,
-        "inventory": 1,
-        "hours_window": 4,
-        "ma_window": 3
+        "time_remaining_days_fixed": 0.002898499377299088,
+        "inventory": 0,
+        "analysis_window_hours": 0.25,
+        "ma_window": 3,
+        "num_data_periods": 7
     },
     "calculated_values": {
-        "reservation_price": 4005.3999993458397,
-        "gap": 6.54160430713091e-07,
-        "spread_base": 9.043533698747702,
-        "half_spread": 4.521766849373851
+        "reservation_price": 4236.049999999999,
+        "gap": 0.0,
+        "spread_base": 13.008140870871642,
+        "half_spread_bid": 6.482571483897361,
+        "half_spread_ask": 6.525569386974281
     },
     "limit_orders": {
-        "ask_price": 4009.921765541053,
-        "bid_price": 4000.8782318423055,
-        "delta_a": 4.52176619521342,
-        "delta_b": 4.5217675035342815,
-        "delta_a_percent": 0.11289175101646326,
-        "delta_b_percent": 0.11289178368038852
+        "ask_price": 4242.575569386973,
+        "bid_price": 4229.567428516102,
+        "delta_a": 6.525569386973984,
+        "delta_b": 6.482571483897118,
+        "delta_a_percent": 0.1540484504898192,
+        "delta_b_percent": 0.15303340338043978
     }
 }

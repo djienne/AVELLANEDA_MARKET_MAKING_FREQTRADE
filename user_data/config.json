@@ -1,7 +1,7 @@
 {
     "max_open_trades": 1,
     "stake_currency": "USDC",
-    "stake_amount": 20,
+    "stake_amount": 50,
     "available_capital": 1000,
     "tradable_balance_ratio": 0.99,
     "amount_reserve_percent": 0.01,
@@ -9,13 +9,13 @@
     "max_entry_position_adjustment": -1,
     "position_adjustment_enable": false,
     "dry_run": true,
-    "fee": 0.00020,
+    "fee": 0.00045,
     "cancel_open_orders_on_exit": true,
     "trading_mode": "futures",
     "margin_mode": "isolated",
     "unfilledtimeout": {
-        "entry": 90,
-        "exit": 90,
+        "entry": 4,
+        "exit": 4,
         "exit_timeout_count": 0,
         "unit": "seconds"
     },
@@ -46,11 +46,11 @@
         "secret": "",
         "ccxt_config": {
             "enableRateLimit": true,
-            "rateLimit": 300
+            "rateLimit": 200
         },
         "ccxt_async_config": {
             "enableRateLimit": true,
-            "rateLimit": 300
+            "rateLimit": 200
         },
         "pair_whitelist": [
             "PAXG/USDC:USDC"

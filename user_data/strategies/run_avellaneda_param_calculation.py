@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Avellaneda parameter calculation runner with duplicate execution protection and comprehensive logging.
-This script prevents running the calculation more than once within a 24-hour period.
+This script prevents running the calculation more than once within a configurable window (default: 15 minutes) and
+targets the active trading symbol rather than a hard-coded default.
 Compatible with both Windows and Linux systems.
 """
 
@@ -83,12 +84,80 @@ def log_subprocess_output(logger, stdout, stderr, title_prefix="SUBPROCESS"):
                 logger.info(f"STDERR: {line}")
 
 
-def run_avellaneda_param_calculation(hour_interval=4):
+def _extract_symbol(raw_symbol):
+    """
+    Normalize a raw pair/symbol string to a base symbol (e.g., 'PAXG/USDC:USDC' -> 'PAXG').
+    Accepts comma-delimited lists and returns the first entry when present.
+    """
+    if not raw_symbol:
+        return None
+
+    symbol = raw_symbol.strip()
+    if ',' in symbol:
+        symbol = symbol.split(',')[0].strip()
+    if '/' in symbol:
+        symbol = symbol.split('/')[0].strip()
+    if ':' in symbol:
+        symbol = symbol.split(':')[0].strip()
+
+    return symbol.upper() if symbol else None
+
+
+def _determine_trading_symbol(project_root: Path, logger: logging.Logger) -> str:
+    """
+    Resolve the trading symbol from environment variables or config.
+    Priority:
+      1) TRADING_SYMBOL / SYMBOL environment variables
+      2) user_data/config.json exchange.pair_whitelist[0]
+      3) SYMBOLS environment variable (first entry)
+      4) Fallback to PAXG
+    """
+    env_candidates = [
+        ("TRADING_SYMBOL", os.getenv("TRADING_SYMBOL")),
+        ("SYMBOL", os.getenv("SYMBOL")),
+    ]
+
+    for source, value in env_candidates:
+        symbol = _extract_symbol(value)
+        if symbol:
+            logger.info(f"Using trading symbol from environment variable {source}: {symbol}")
+            return symbol
+
+    config_path = project_root / "user_data" / "config.json"
+    if config_path.exists():
+        try:
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+            pair_whitelist = config_data.get("exchange", {}).get("pair_whitelist") or []
+            if pair_whitelist:
+                symbol = _extract_symbol(pair_whitelist[0])
+                if symbol:
+                    logger.info(f"Using trading symbol from config pair_whitelist: {symbol}")
+                    return symbol
+        except Exception as exc:  # Broad catch to keep runner resilient
+            logger.warning(f"Could not load trading symbol from config {config_path}: {exc}")
+    else:
+        logger.warning(f"Config file not found at {config_path}, skipping config-based symbol detection.")
+
+    # Secondary fallback: a SYMBOLS env var (may be comma-delimited)
+    symbols_env = os.getenv("SYMBOLS")
+    symbol = _extract_symbol(symbols_env)
+    if symbol:
+        logger.info(f"Using trading symbol from environment variable SYMBOLS: {symbol}")
+        return symbol
+
+    fallback_symbol = "PAXG"
+    logger.warning(f"Falling back to default trading symbol: {fallback_symbol}")
+    return fallback_symbol
+
+
+def run_avellaneda_param_calculation(hour_interval=0.25, ticker=None):
     """
     Executes the Avellaneda parameter calculation script with duplicate run protection.
 
     Args:
-        hour_interval (int): Number of hours to wait between executions (default: 1)
+        hour_interval (float): Number of hours to wait between executions (default: 0.25 / 15 minutes)
+        ticker (str, optional): Trading symbol override. If None, resolves from env/config.
 
     Returns:
         dict: Result dictionary with status and message
@@ -112,6 +181,9 @@ def run_avellaneda_param_calculation(hour_interval=4):
     logger.info(f"Project root: {project_root}")
     logger.info(f"Script path: {script_path}")
     logger.info(f"Lock file path: {lock_file_path}")
+
+    trading_symbol = ticker or _determine_trading_symbol(project_root, logger)
+    logger.info(f"Target trading symbol for parameter calculation: {trading_symbol}")
     
     # Check if the calculation script exists
     if not script_path.exists():
@@ -119,7 +191,8 @@ def run_avellaneda_param_calculation(hour_interval=4):
         logger.error(error_msg)
         return {
             "status": "error",
-            "message": error_msg
+            "message": error_msg,
+            "symbol": trading_symbol
         }
     
     logger.info(f"Calculation script found: {script_path}")
@@ -165,7 +238,8 @@ def run_avellaneda_param_calculation(hour_interval=4):
                     "message": skip_message,
                     "last_run": last_run_time.isoformat(),
                     "hour_interval": hour_interval,
-                    "time_remaining_minutes": round(time_remaining.total_seconds() / 60, 2)
+                    "time_remaining_minutes": round(time_remaining.total_seconds() / 60, 2),
+                    "symbol": trading_symbol
                 }
             else:
                 logger.info(f"Required interval of {hour_interval} hour(s) has passed. Proceeding with calculation.")
@@ -189,15 +263,19 @@ def run_avellaneda_param_calculation(hour_interval=4):
         
         try:
             # Run the calculation script using Python
-            logger.info(f"Executing command: {sys.executable} {script_path}")
+            command = [sys.executable, str(script_path), trading_symbol]
+            logger.info(f"Executing command: {' '.join(command)}")
             logger.info(f"Timeout set to: 3600 seconds")
-            
-            result = subprocess.run(
-                [sys.executable, str(script_path)],
-                capture_output=True,
-                text=True,
-                timeout=3600
-            )
+
+            # Pass through environment variables for consistent paths
+            env = os.environ.copy()
+            # Ensure AVELLANEDA_PARAMS_DIR is set if not already
+            if 'AVELLANEDA_PARAMS_DIR' not in env:
+                # Default to scripts directory
+                env['AVELLANEDA_PARAMS_DIR'] = str(project_root / "scripts")
+                logger.info(f"Setting AVELLANEDA_PARAMS_DIR to: {env['AVELLANEDA_PARAMS_DIR']}")
+
+            result = subprocess.run(command, capture_output=True, text=True, timeout=3600, env=env)
             
             logger.info(f"Subprocess completed with return code: {result.returncode}")
             
@@ -210,7 +288,8 @@ def run_avellaneda_param_calculation(hour_interval=4):
                 lock_data = {
                     "last_run": current_time.isoformat(),
                     "script_path": str(script_path),
-                    "execution_status": "success"
+                    "execution_status": "success",
+                    "symbol": trading_symbol
                 }
                 
                 logger.info(f"Updating lock file: {lock_file_path}")
@@ -224,6 +303,7 @@ def run_avellaneda_param_calculation(hour_interval=4):
                     "status": "success",
                     "message": success_message,
                     "execution_time": current_time.isoformat(),
+                    "symbol": trading_symbol,
                     "stdout": result.stdout,
                     "stderr": result.stderr if result.stderr else None
                 }
@@ -235,7 +315,8 @@ def run_avellaneda_param_calculation(hour_interval=4):
                     "status": "error",
                     "message": error_message,
                     "stdout": result.stdout,
-                    "stderr": result.stderr
+                    "stderr": result.stderr,
+                    "symbol": trading_symbol
                 }
                 
         finally:
@@ -248,14 +329,16 @@ def run_avellaneda_param_calculation(hour_interval=4):
         logger.error(f"TIMEOUT: {timeout_message}")
         return {
             "status": "error",
-            "message": timeout_message
+            "message": timeout_message,
+            "symbol": trading_symbol
         }
     except Exception as e:
         exception_message = f"Error executing calculation script: {str(e)}"
         logger.error(f"EXCEPTION: {exception_message}")
         return {
             "status": "error",
-            "message": exception_message
+            "message": exception_message,
+            "symbol": trading_symbol
         }
 
 
@@ -266,11 +349,21 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Run Avellaneda parameter calculation with configurable interval')
-    parser.add_argument('--hours', type=int, default=4,
-                       help='Number of hours to wait between executions (default: 4)')
+    parser.add_argument(
+        '--hours',
+        type=float,
+        default=0.25,
+        help='Number of hours to wait between executions (default: 0.25 / 15 minutes)'
+    )
+    parser.add_argument(
+        '--symbol',
+        type=str,
+        default=None,
+        help='Trading symbol override (e.g., PAXG). Falls back to config/env if omitted.'
+    )
     args = parser.parse_args()
 
-    result = run_avellaneda_param_calculation(hour_interval=args.hours)
+    result = run_avellaneda_param_calculation(hour_interval=args.hours, ticker=args.symbol)
     
     # Set up logging for final output (reuse the same logger)
     logger, log_file_path = setup_logging()
@@ -278,6 +371,8 @@ if __name__ == "__main__":
     log_separator(logger, "EXECUTION SUMMARY")
     logger.info(f"Status: {result['status'].upper()}")
     logger.info(f"Message: {result['message']}")
+    if result.get('symbol'):
+        logger.info(f"Symbol: {result['symbol']}")
     
     if result.get('execution_time'):
         logger.info(f"Execution Time: {result['execution_time']}")
@@ -290,7 +385,7 @@ if __name__ == "__main__":
         logger.info(f"Last Run UTC Date: {result.get('last_run_date_utc', 'N/A')}")
         logger.info(f"Minutes Since Midnight UTC: {result.get('minutes_since_midnight_utc', 'N/A')}")
     
-    hour_interval = result.get('hour_interval', 1)
+    hour_interval = result.get('hour_interval', 0.25)
     logger.info(f"Execution Schedule:")
     logger.info(f"  • Every {hour_interval} hour(s) from last successful run")
     

@@ -1,37 +1,38 @@
 {
     "ticker": "ETH",
-    "timestamp": "2025-11-30T23:49:28.051375",
+    "timestamp": "2025-12-01T00:18:41.597186",
     "market_data": {
-        "mid_price": 3025.25,
-        "sigma": 0.013153676776656785,
-        "A_bid": 0.5567381715763569,
-        "k_bid": 0.7263172573813886,
-        "A_ask": 0.48778457475423737,
-        "k_ask": 0.5595682838727689
+        "mid_price": 3018.95,
+        "sigma": 0.01534531455300264,
+        "A_bid": 0.8172118876281154,
+        "k_bid": 0.26464510030090527,
+        "A_ask": 0.314507447289267,
+        "k_ask": 0.32195092884449
     },
     "optimal_parameters": {
-        "gamma": 0.7547751358912187,
-        "time_horizon_hours": 0.0695639850551781
+        "gamma": 0.09677978847640506,
+        "time_horizon_hours": 0.5386086725079708
     },
     "current_state": {
-        "time_remaining_days_fixed": 0.002898499377299088,
+        "time_remaining_days_fixed": 0.02244202802116545,
         "inventory": 0,
         "analysis_window_hours": 0.25,
-        "ma_window": 3
+        "ma_window": 3,
+        "num_data_periods": 7
     },
     "calculated_values": {
-        "reservation_price": 3025.25,
+        "reservation_price": 3018.95,
         "gap": 0.0,
-        "spread_base": 5.539657340143913,
-        "half_spread_bid": 2.676172518173434,
-        "half_spread_ask": 2.863484821970479
+        "spread_base": 10.5974229218202,
+        "half_spread_bid": 5.5510144733873075,
+        "half_spread_ask": 5.046408448432892
     },
     "limit_orders": {
-        "ask_price": 3028.1134848219704,
-        "bid_price": 3022.5738274818264,
-        "delta_a": 2.86348482197036,
-        "delta_b": 2.6761725181736438,
-        "delta_a_percent": 0.09465283272358846,
-        "delta_b_percent": 0.08846120215432257
+        "ask_price": 3023.9964084484327,
+        "bid_price": 3013.3989855266127,
+        "delta_a": 5.046408448432885,
+        "delta_b": 5.551014473387113,
+        "delta_a_percent": 0.16715773525341213,
+        "delta_b_percent": 0.18387235540128566
     }
 }
