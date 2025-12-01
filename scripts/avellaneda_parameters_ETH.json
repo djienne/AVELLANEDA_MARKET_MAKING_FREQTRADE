@@ -1,38 +1,38 @@
 {
     "ticker": "ETH",
-    "timestamp": "2025-12-01T00:18:41.597186",
+    "timestamp": "2025-12-01T09:09:03.916360",
     "market_data": {
-        "mid_price": 3018.95,
-        "sigma": 0.01534531455300264,
-        "A_bid": 0.8172118876281154,
-        "k_bid": 0.26464510030090527,
-        "A_ask": 0.314507447289267,
-        "k_ask": 0.32195092884449
+        "mid_price": 2837.25,
+        "sigma": 0.022700747792205423,
+        "A_bid": 0.8197440314481602,
+        "k_bid": 0.7365151260625623,
+        "A_ask": 0.8748606440450519,
+        "k_ask": 0.5899477455898646
     },
     "optimal_parameters": {
-        "gamma": 0.09677978847640506,
-        "time_horizon_hours": 0.5386086725079708
+        "gamma": 0.05990703402913468,
+        "time_horizon_hours": 2.5
     },
     "current_state": {
-        "time_remaining_days_fixed": 0.02244202802116545,
+        "time_remaining_days_fixed": 0.10416666666666667,
         "inventory": 0,
         "analysis_window_hours": 0.25,
         "ma_window": 3,
-        "num_data_periods": 7
+        "num_data_periods": 42
     },
     "calculated_values": {
-        "reservation_price": 3018.95,
+        "reservation_price": 2837.25,
         "gap": 0.0,
-        "spread_base": 10.5974229218202,
-        "half_spread_bid": 5.5510144733873075,
-        "half_spread_ask": 5.046408448432892
+        "spread_base": 28.806790716679956,
+        "half_spread_bid": 14.248861484307723,
+        "half_spread_ask": 14.557929232372235
     },
     "limit_orders": {
-        "ask_price": 3023.9964084484327,
-        "bid_price": 3013.3989855266127,
-        "delta_a": 5.046408448432885,
-        "delta_b": 5.551014473387113,
-        "delta_a_percent": 0.16715773525341213,
-        "delta_b_percent": 0.18387235540128566
+        "ask_price": 2851.8079292323723,
+        "bid_price": 2823.001138515692,
+        "delta_a": 14.557929232372317,
+        "delta_b": 14.248861484307781,
+        "delta_a_percent": 0.5130999817560072,
+        "delta_b_percent": 0.502206766562967
     }
 }

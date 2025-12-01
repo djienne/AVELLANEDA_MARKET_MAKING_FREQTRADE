@@ -27,20 +27,10 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
         mask_sell = (sell_orders.index >= period_start) & (sell_orders.index < period_end)
         period_sell_orders = sell_orders.loc[mask_sell].copy()
 
-        # We can attempt calculation even if orders are empty (counts will be 0)
-        # providing we have a valid mid price reference.
-
-        # Calculate reference mid-price for this period
-        best_bid = period_buy_orders['price'].max() if not period_buy_orders.empty else np.nan
-        best_ask = period_sell_orders['price'].min() if not period_sell_orders.empty else np.nan
-
-        if pd.isna(best_bid) or pd.isna(best_ask):
-            s_period = mid_price_df.loc[period_start:period_end]
-            reference_mid = s_period['mid_price'].mean() if not s_period.empty else np.nan
-        else:
-            reference_mid = (best_bid + best_ask) / 2
-
-        if pd.isna(reference_mid):
+        # Ensure mid_price_df is sorted (it should be, but safety first)
+        mid_price_subset = mid_price_df.loc[period_start:period_end].sort_index()
+        
+        if mid_price_subset.empty:
             A_bid_list.append(np.nan)
             k_bid_list.append(np.nan)
             A_ask_list.append(np.nan)
@@ -53,22 +43,63 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
         
         period_duration_seconds = H * 3600
         
-        for price_delta in deltalist:
-            limit_bid_price = reference_mid - price_delta
-            limit_ask_price = reference_mid + price_delta
+        # --- BID SIDE ANALYSIS (Market Sells hitting our Bid) ---
+        # We need to calculate how far each market sell "walked" down from the mid price.
+        # Distance = Mid_Price - Trade_Price
+        # A quote at 'delta' would be filled if Distance >= delta
+        
+        if not period_sell_orders.empty:
+            # Align trades with mid prices
+            # We need to reset index to use merge_asof
+            sells_reset = period_sell_orders.reset_index().sort_values('datetime')
+            mids_reset = mid_price_subset.reset_index().sort_values('datetime')
             
-            # BID side: Market SELL orders hitting our bid
-            # A sell order hits our bid if sell_price <= our_bid_price
-            n_bid_fills = 0
-            if not period_sell_orders.empty:
-                n_bid_fills = len(period_sell_orders[period_sell_orders['price'] <= limit_bid_price])
+            merged_sells = pd.merge_asof(
+                sells_reset, 
+                mids_reset[['datetime', 'mid_price']], 
+                on='datetime', 
+                direction='backward'
+            )
+            
+            # Calculate distance from mid
+            # If trade price is 99 and mid is 100, distance is 1.
+            merged_sells['distance'] = merged_sells['mid_price'] - merged_sells['price']
+            
+            # Filter out negative distances (trades above mid price - rare but possible in fast markets or crossed books)
+            # For intensity estimation, we care about the "depth" side.
+            valid_sells = merged_sells[merged_sells['distance'] > -1e-9]['distance'].values
+        else:
+            valid_sells = np.array([])
+
+        # --- ASK SIDE ANALYSIS (Market Buys hitting our Ask) ---
+        # We need to calculate how far each market buy "walked" up from the mid price.
+        # Distance = Trade_Price - Mid_Price
+        # A quote at 'delta' would be filled if Distance >= delta
+        
+        if not period_buy_orders.empty:
+            buys_reset = period_buy_orders.reset_index().sort_values('datetime')
+            mids_reset = mid_price_subset.reset_index().sort_values('datetime')
+            
+            merged_buys = pd.merge_asof(
+                buys_reset, 
+                mids_reset[['datetime', 'mid_price']], 
+                on='datetime', 
+                direction='backward'
+            )
+            
+            merged_buys['distance'] = merged_buys['price'] - merged_buys['mid_price']
+            valid_buys = merged_buys[merged_buys['distance'] > -1e-9]['distance'].values
+        else:
+            valid_buys = np.array([])
+
+        # Calculate counts for each delta grid point
+        for price_delta in deltalist:
+            # Bid side: count sells that walked at least 'price_delta'
+            n_bid_fills = np.sum(valid_sells >= price_delta) if len(valid_sells) > 0 else 0
             bid_data_points.append((price_delta, n_bid_fills, period_duration_seconds))
 
-            # ASK side: Market BUY orders hitting our ask  
-            # A buy order hits our ask if buy_price >= our_ask_price
-            n_ask_fills = 0
-            if not period_buy_orders.empty:
-                n_ask_fills = len(period_buy_orders[period_buy_orders['price'] >= limit_ask_price])
+            # Ask side: count buys that walked at least 'price_delta'
+            n_ask_fills = np.sum(valid_buys >= price_delta) if len(valid_buys) > 0 else 0
             ask_data_points.append((price_delta, n_ask_fills, period_duration_seconds))
 
         # Fit exponential model using MLE

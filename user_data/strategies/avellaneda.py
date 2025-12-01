@@ -399,13 +399,59 @@ class avellaneda(IStrategy):
     
     def get_mid_price(self, pair: str, fallback_rate: float) -> float:
         """
-        Get mid price from orderbook, fallback to provided rate if orderbook unavailable
+        Get effective mid price from orderbook based on $1000 depth.
+        Fallback to best mid or provided rate if orderbook unavailable or insufficient.
         """
-        orderbook = self.dp.orderbook(pair, maximum=1)
-        if orderbook and 'bids' in orderbook and 'asks' in orderbook:
-            best_bid = orderbook['bids'][0][0]
-            best_ask = orderbook['asks'][0][0]
-            return (best_bid + best_ask) / 2
+        # Request deeper orderbook to find $1000 depth
+        orderbook = self.dp.orderbook(pair, maximum=50)
+        
+        if not orderbook or 'bids' not in orderbook or 'asks' not in orderbook:
+            return fallback_rate
+            
+        THRESHOLD = 1000.0
+        
+        # Naive Mid Calculation (Top of Book)
+        best_bid = orderbook['bids'][0][0] if len(orderbook['bids']) > 0 else None
+        best_ask = orderbook['asks'][0][0] if len(orderbook['asks']) > 0 else None
+        naive_mid = (best_bid + best_ask) / 2 if best_bid and best_ask else None
+        
+        # Calculate Effective Bid
+        effective_bid = None
+        cum_val = 0.0
+        # Bids are sorted high to low
+        for price, amount in orderbook['bids']:
+            cum_val += price * amount
+            if cum_val >= THRESHOLD:
+                effective_bid = price
+                break
+        
+        # Fallback to best bid if threshold not reached
+        if effective_bid is None and len(orderbook['bids']) > 0:
+            effective_bid = orderbook['bids'][0][0]
+            
+        # Calculate Effective Ask
+        effective_ask = None
+        cum_val = 0.0
+        # Asks are sorted low to high
+        for price, amount in orderbook['asks']:
+            cum_val += price * amount
+            if cum_val >= THRESHOLD:
+                effective_ask = price
+                break
+                
+        # Fallback to best ask if threshold not reached
+        if effective_ask is None and len(orderbook['asks']) > 0:
+            effective_ask = orderbook['asks'][0][0]
+            
+        if effective_bid is not None and effective_ask is not None:
+            effective_mid = (effective_bid + effective_ask) / 2
+            
+            # Log comparison
+            if naive_mid:
+                diff_pct = abs(effective_mid - naive_mid) / naive_mid * 100
+                logger.info(f"Price Check | Naive Mid: {naive_mid:.4f} | Effective Mid: {effective_mid:.4f} | Diff: {diff_pct:.4f}%")
+            
+            return effective_mid
         else:
             return fallback_rate
      
@@ -423,7 +469,8 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
-        q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        q_inventory_exposure = 0.0
         r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy
@@ -443,7 +490,8 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
-        q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        q_inventory_exposure = 0.0
         r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_sell
@@ -463,7 +511,8 @@ class avellaneda(IStrategy):
         open_trades = Trade.get_open_trades()
         total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
         total_capital = self.wallets.get_total(self.config['stake_currency'])
-        q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
+        q_inventory_exposure = 0.0
         r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
 
         return r_buy

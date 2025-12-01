@@ -1,38 +1,38 @@
 {
     "ticker": "PAXG",
-    "timestamp": "2025-11-30T23:57:24.233718",
+    "timestamp": "2025-12-01T22:33:53.645443",
     "market_data": {
-        "mid_price": 4237.15,
-        "sigma": 0.0072910052271264675,
-        "A_bid": 0.04195425024786382,
-        "k_bid": 0.26818381377996175,
-        "A_ask": 0.08488642904550998,
-        "k_ask": 0.9454840606534999
+        "mid_price": 4249.35,
+        "sigma": 0.006776433344784061,
+        "A_bid": 0.06471468304260207,
+        "k_bid": 8.555746279272633,
+        "A_ask": 0.07705140225812286,
+        "k_ask": 8.366170170328594
     },
     "optimal_parameters": {
-        "gamma": 0.12557250890355254,
-        "time_horizon_hours": 0.11603972084031947
+        "gamma": 2.498003031629688,
+        "time_horizon_hours": 0.19356592067028175
     },
     "current_state": {
-        "time_remaining_days_fixed": 0.004834988368346644,
+        "time_remaining_days_fixed": 0.008065246694595072,
         "inventory": 0,
         "analysis_window_hours": 0.25,
         "ma_window": 3,
-        "num_data_periods": 10
+        "num_data_periods": 50
     },
     "calculated_values": {
-        "reservation_price": 4237.15,
+        "reservation_price": 4249.35,
         "gap": 0.0,
-        "spread_base": 4.630996889812017,
-        "half_spread_bid": 3.348191721372601,
-        "half_spread_ask": 1.2828051684394153
+        "spread_base": 16.91258359124978,
+        "half_spread_bid": 8.45526942656954,
+        "half_spread_ask": 8.457314164680241
     },
     "limit_orders": {
-        "ask_price": 4238.432805168439,
-        "bid_price": 4233.801808278627,
-        "delta_a": 1.282805168439154,
-        "delta_b": 3.348191721373041,
-        "delta_a_percent": 0.030275188946323688,
-        "delta_b_percent": 0.07901990067316572
+        "ask_price": 4257.807314164681,
+        "bid_price": 4240.894730573431,
+        "delta_a": 8.45731416468061,
+        "delta_b": 8.45526942656943,
+        "delta_a_percent": 0.19902606668503678,
+        "delta_b_percent": 0.19897794784071518
     }
 }

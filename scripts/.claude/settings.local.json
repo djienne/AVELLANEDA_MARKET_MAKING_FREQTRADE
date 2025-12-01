@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nUpdate Avellaneda strategy implementation and add ETH parameters\n\n- Enhance backtest.py with improved parameter calculation\n- Update calculate_avellaneda_parameters.py, intensity.py, and volatility.py modules\n- Refine avellaneda.py strategy implementation\n- Add avellaneda_parameters_ETH.json for ETH-specific configuration\n- Add debug_parameters.py utility for parameter debugging\n- Remove duplicate hyperliquid_data_collector backup file\n- Update Claude Code settings to allow git push and rm commands\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git branch:*)",
+      "Bash(cat:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix README documentation inconsistencies and update data collector\n\nDocumentation improvements:\n- Clarify default trading pair configuration (PAXG current, not hardcoded)\n- Document all three parameter files (PAXG, BTC, ETH) in project structure\n- Add comprehensive \"Switching Trading Pairs\" section with step-by-step guide\n- Clarify parameter recalculation mechanism as rate-limited (at most once per 4 hours)\n- Document lock file mechanism (.avellaneda_last_run.json)\n- Document config_short.json alternative configuration\n- Add key support scripts to project structure (backtest.py, volatility.py, intensity.py)\n- Improve mathematical foundation formulas and parameter descriptions\n\nData collector improvements:\n- Add websocket-client dependency to Dockerfile for better compatibility\n- Simplify HL_data_collector README to focus on data collection purpose\n- Remove obsolete BUGFIX_SUMMARY.md documentation\n\nParameter updates:\n- Update ETH parameters timestamp (latest recalculation)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
