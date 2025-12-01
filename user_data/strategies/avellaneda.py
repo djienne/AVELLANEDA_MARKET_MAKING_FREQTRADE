@@ -44,55 +44,51 @@ pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', None)
 pd.options.mode.chained_assignment = None
 
-def calculate_optimal_spreads(mid_price,sigma,k_bid,k_ask,gamma,time_remaining,q_inventory_exposure, fee):
-    # Convert percentage volatility to absolute volatility (in $)
+
+def calculate_optimal_spreads(mid_price, sigma, k_bid, k_ask, gamma, time_remaining, q_inventory_exposure, fee):
+    """Compute reservation price and bid/ask quotes, logging the inputs/outputs."""
     sigma_abs = sigma * mid_price
 
-    # Calculate reservation price decay and risk term
     reservation_decay = gamma * sigma_abs**2.0 * time_remaining
     risk_term = 0.5 * reservation_decay
 
-    # Calculate asymmetric half-spreads
-    # Note: If k is very small, log term dominates.
     half_spread_bid = risk_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_bid))
     half_spread_ask = risk_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_ask))
 
-    # Calculate reservation price (our "fair value" given inventory and time remaining)
     r = mid_price - q_inventory_exposure * reservation_decay
 
-    # Calculate limit order prices
-    # Quotes are centered around reservation price r, but with asymmetric spreads
-    r_b = r - half_spread_bid - mid_price*fee
-    r_a = r + half_spread_ask + mid_price*fee
+    r_b = r - half_spread_bid - mid_price * fee
+    r_a = r + half_spread_ask + mid_price * fee
 
-    # Calculate deltas relative to mid-price for logging
     delta_a_rel = r_a - mid_price
     delta_b_rel = mid_price - r_b
 
-    # Calculate relative percentages
     delta_a_percent = (delta_a_rel / mid_price) * 100.0
     delta_b_percent = (delta_b_rel / mid_price) * 100.0
 
     mm_logger.info("=" * 65)
-    mm_logger.info("📊 AVELLANEDA-STOIKOV MODEL PARAMETERS")
+    mm_logger.info("AVELLANEDA-STOIKOV MODEL PARAMETERS")
     mm_logger.info("=" * 65)
-    mm_logger.info(f"│ Time Remaining Fraction    │ {time_remaining:>12.4f}          │")
-    mm_logger.info(f"│ Inventory Exposure         │ {q_inventory_exposure:>12.4f}          │")
-    mm_logger.info(f"│ Sigma (Volatility)         │ {sigma:>12.4f}          │")
-    mm_logger.info(f"│ K Bid                      │ {k_bid:>12.4f}          │")
-    mm_logger.info(f"│ K Ask                      │ {k_ask:>12.4f}          │")
-    mm_logger.info(f"│ maker fee                  │ {fee:>12.5f}          │")
-    mm_logger.info(f"│ Gamma                      │ {gamma:>12.4f}          │")
-    mm_logger.info(f"│ Mid-Price                  │ {mid_price:>12.4f}          │")
-    mm_logger.info(f"│ Reservation Price          │ {r:>12.4f}          │")
-    mm_logger.info("├" + "─" * 63 + "┤")
-    mm_logger.info(f"│ Buy Spread (% of mid)      │ {delta_b_percent:>12.4f}%         │")
-    mm_logger.info(f"│ Sell Spread (% of mid)     │ {delta_a_percent:>12.4f}%         │")
-    mm_logger.info(f"│ Buy Limit Price            │ {r_b:>12.4f}          │")
-    mm_logger.info(f"│ Sell Limit Price           │ {r_a:>12.4f}          │")
+    mm_logger.info(f"Time Remaining Fraction: {time_remaining:>12.4f}")
+    mm_logger.info(f"Inventory Exposure:      {q_inventory_exposure:>12.4f}")
+    mm_logger.info(f"Sigma (Volatility):      {sigma:>12.6f}")
+    mm_logger.info(f"K Bid:                   {k_bid:>12.6f}")
+    mm_logger.info(f"K Ask:                   {k_ask:>12.6f}")
+    mm_logger.info(f"Maker fee:               {fee:>12.6f}")
+    mm_logger.info(f"Gamma:                   {gamma:>12.6f}")
+    mm_logger.info(f"Mid-Price:               {mid_price:>12.4f}")
+    mm_logger.info(f"Reservation Price:       {r:>12.4f}")
+    mm_logger.info(f"Buy Spread (% of mid):   {delta_b_percent:>12.4f}%")
+    mm_logger.info(f"Sell Spread (% of mid):  {delta_a_percent:>12.4f}%")
+    mm_logger.info(f"Buy Limit Price:         {r_b:>12.4f}")
+    mm_logger.info(f"Sell Limit Price:        {r_a:>12.4f}")
     mm_logger.info("=" * 65)
 
     return r_b, r_a
+
+
+def _fmt_optional(value: float | None, digits: int = 6) -> str:
+    return f"{value:.{digits}f}" if isinstance(value, (int, float)) else "n/a"
 
 #---------------------------------------------------------- LOAD CONFIG ----------------------------------------------------------
 
@@ -152,6 +148,48 @@ def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
     raise FileNotFoundError(f"Could not find {filename} from {start}")
 
 
+def log_parameters_summary(params_file: Path, params: dict) -> None:
+    """Log a concise summary of the loaded parameters and spreads."""
+    market_data = params.get('market_data', {})
+    optimal_params = params.get('optimal_parameters', {})
+    limit_orders = params.get('limit_orders', {})
+    calculated_values = params.get('calculated_values', {})
+
+    k_bid = market_data.get('k_bid', market_data.get('k'))
+    k_ask = market_data.get('k_ask', market_data.get('k'))
+    sigma = market_data.get('sigma')
+    gamma = optimal_params.get('gamma')
+    time_horizon_hours = optimal_params.get('time_horizon_hours')
+    mid_price = market_data.get('mid_price') or calculated_values.get('reservation_price')
+
+    delta_b = limit_orders.get('delta_b', calculated_values.get('half_spread_bid'))
+    delta_a = limit_orders.get('delta_a', calculated_values.get('half_spread_ask'))
+    delta_b_percent = limit_orders.get('delta_b_percent')
+    delta_a_percent = limit_orders.get('delta_a_percent')
+    bid_price = limit_orders.get('bid_price')
+    ask_price = limit_orders.get('ask_price')
+
+    logger.info(
+        "Parameter summary | source=%s | gamma=%s | sigma=%s | k_bid=%s | k_ask=%s | horizon_h=%s | mid=%s",
+        params_file,
+        _fmt_optional(gamma),
+        _fmt_optional(sigma),
+        _fmt_optional(k_bid),
+        _fmt_optional(k_ask),
+        _fmt_optional(time_horizon_hours, 4),
+        _fmt_optional(mid_price, 4),
+    )
+    logger.info(
+        "Spread snapshot   | bid=%s (%s%%) | ask=%s (%s%%) | bid_px=%s | ask_px=%s",
+        _fmt_optional(delta_b),
+        _fmt_optional(delta_b_percent, 4),
+        _fmt_optional(delta_a),
+        _fmt_optional(delta_a_percent, 4),
+        _fmt_optional(bid_price, 4),
+        _fmt_optional(ask_price, 4),
+    )
+
+
 def load_configs(start_dir: Path | None = None, max_up: int = 10):
     """
     Load Avellaneda parameters from JSON file, searching in multiple locations.
@@ -182,6 +220,7 @@ def load_configs(start_dir: Path | None = None, max_up: int = 10):
         try:
             params_MM = json.loads(params_file.read_text(encoding='utf-8'))
             logger.info(f"Successfully loaded parameters from: {params_file}")
+            log_parameters_summary(params_file, params_MM)
             return params_MM
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading {params_file}: {e}")
@@ -205,6 +244,7 @@ def load_configs(start_dir: Path | None = None, max_up: int = 10):
             params_file_found = find_upwards(location, start_dir, max_up)
             params_MM = json.loads(params_file_found.read_text(encoding='utf-8'))
             logger.info(f"Successfully loaded parameters from: {params_file_found}")
+            log_parameters_summary(params_file_found, params_MM)
             return params_MM
         except FileNotFoundError:
             continue
