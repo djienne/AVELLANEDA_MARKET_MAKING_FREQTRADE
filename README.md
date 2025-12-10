@@ -18,6 +18,9 @@ This project implements an advanced market making strategy for Hyperliquid, dyna
 
 **Current Configuration:** The included configuration is set to trade PAXG/USDC. The system includes pre-calculated parameters for two trading pairs: PAXG and ETH. To switch trading pairs, change `exchange.pair_whitelist` in `user_data/config.json`; the strategy and parameter tooling will pick up the first pair and look for `avellaneda_parameters_{TICKER}.json` automatically.
 
+**💰 Support this project**:
+- **Hyperliquid**: Sign up with [this referral link](https://app.hyperliquid.xyz/join/FREQTRADE) for 10% fee reduction
+
 ## Project Structure
 
 ```
