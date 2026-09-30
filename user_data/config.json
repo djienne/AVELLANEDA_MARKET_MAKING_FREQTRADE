@@ -9,7 +9,7 @@
     "max_entry_position_adjustment": -1,
     "position_adjustment_enable": false,
     "dry_run": true,
-    "fee": 0.00045,
+    "fee": 0.0002,
     "cancel_open_orders_on_exit": true,
     "trading_mode": "futures",
     "margin_mode": "isolated",

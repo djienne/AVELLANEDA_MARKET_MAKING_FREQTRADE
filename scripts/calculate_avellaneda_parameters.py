@@ -2,17 +2,14 @@
 # This script implements the optimal market making strategy from
 # "High-frequency trading in a limit order book" by Avellaneda & Stoikov (2008)
 
-print("DEBUG: Script started", flush=True)
 import numpy as np
-print("DEBUG: numpy imported", flush=True)
 import pandas as pd
-print("DEBUG: pandas imported", flush=True)
 import sys
 import os
+import time
 import argparse
 from pathlib import Path
 import json
-print("DEBUG: Imports finished", flush=True)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STRATEGY_DIR = PROJECT_ROOT / "user_data" / "strategies"
@@ -29,7 +26,7 @@ except Exception as exc:
 from utils import get_tick_size, load_trades_data, load_effective_book, effective_mid_grid
 from volatility import calculate_volatility
 from intensity import calculate_intensity_params
-from backtest import optimize_params
+from backtest import MAKER_FEE, half_spreads, optimize_params, smooth
 
 
 def parse_arguments():
@@ -38,8 +35,10 @@ def parse_arguments():
     parser.add_argument('ticker', nargs='?', default=None, help='Ticker symbol (defaults to first pair in config.json)')
     parser.add_argument('--minutes', type=int, default=15, 
                         help='Frequency in minutes to recalculate parameters (default: 15)')
+    parser.add_argument('--max-data-age', type=float, default=600,
+                        help='Refuse to run if the newest order book data is older than this many seconds '
+                             '(default: 600; the collector rotates files every 300 s)')
     return parser.parse_args()
-
 
 
 def resolve_ticker(cli_ticker: str | None) -> str:
@@ -55,121 +54,6 @@ def resolve_ticker(cli_ticker: str | None) -> str:
         except Exception as exc:
             print(f"Warning: failed to derive ticker from config: {exc}", flush=True)
     return "ETH"
-
-def get_smoothed_parameters(param_list, ma_window, use_last_n=None):
-    """
-    Get smoothed parameter value using moving average.
-    
-    Args:
-        param_list: List of parameter values
-        ma_window: Number of periods to average
-        use_last_n: If specified, only consider the last n values (default: use all)
-    
-    Returns:
-        Smoothed parameter value, or NaN if insufficient data
-    """
-    if not param_list:
-        return np.nan
-    
-    # FIX: Include the last element (was previously excluded due to off-by-one)
-    if use_last_n is not None:
-        values = param_list[-use_last_n:]
-    else:
-        values = param_list[-ma_window:] if ma_window > 0 else param_list[-1:]
-    
-    # Filter out NaN values
-    valid_values = [v for v in values if pd.notna(v)]
-    
-    if not valid_values:
-        return np.nan
-    
-    return np.mean(valid_values)
-
-
-def calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask, H, mid_price_df, ma_window, ticker, num_periods):
-    """Calculate the final reservation price and quotes."""
-    print("\n" + "-"*20)
-    print("Calculating final parameters for current state...")
-    
-    s = mid_price_df['mid_price'].iloc[-1]
-    
-    # Use the optimized fixed time horizon for risk calculation
-    # This represents the "urgency" factor in the model
-    time_remaining = time_horizon / 24.0
-    
-    # Set inventory to 0 for neutral pricing as requested
-    q = 0.0 
-
-    # Convert percentage volatility to absolute volatility (in $)
-    sigma_abs = sigma * s
-
-    reservation_decay = gamma * sigma_abs**2.0 * time_remaining
-    risk_aversion_term = 0.5 * reservation_decay
-    
-    half_spread_bid = risk_aversion_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_bid))
-    half_spread_ask = risk_aversion_term + (1.0 / gamma) * np.log(1.0 + (gamma / k_ask))
-    spread_base = half_spread_bid + half_spread_ask
-    
-    r = s - q * reservation_decay
-    gap = abs(r - s)
-
-    # Calculate final quotes centered around reservation price
-    r_a = r + half_spread_ask
-    r_b = r - half_spread_bid
-    
-    # SAFETY: Enforce minimum distance from mid price to avoid negative deltas
-    # Total minimum spread 0.04%, so 0.02% per side
-    MIN_SPREAD_PCT = 0.0004
-    min_half_spread = s * (MIN_SPREAD_PCT / 2.0)
-    
-    if r_a < s + min_half_spread:
-        print(f"Safety: Ask Price too aggressive (Delta < {MIN_SPREAD_PCT/2*100:.3f}%). Clamping to minimum.")
-        r_a = s + min_half_spread
-        
-    if r_b > s - min_half_spread:
-        print(f"Safety: Bid Price too aggressive (Delta < {MIN_SPREAD_PCT/2*100:.3f}%). Clamping to minimum.")
-        r_b = s - min_half_spread
-    
-    # Calculate deltas relative to mid price
-    delta_a = r_a - s
-    delta_b = s - r_b
-    
-    return {
-        "ticker": ticker,
-        "timestamp": pd.Timestamp.now().isoformat(),
-        "market_data": {
-            "mid_price": float(s),
-            "sigma": float(sigma),
-            "A_bid": float(A_bid), "k_bid": float(k_bid),
-            "A_ask": float(A_ask), "k_ask": float(k_ask)
-        },
-        "optimal_parameters": {
-            "gamma": float(gamma),
-            "time_horizon_hours": float(time_horizon)
-        },
-        "current_state": {
-            "time_remaining_days_fixed": float(time_remaining),
-            "inventory": int(q),
-            "analysis_window_hours": H,
-            "ma_window": ma_window,
-            "num_data_periods": int(num_periods)
-        },
-        "calculated_values": {
-            "reservation_price": float(r), 
-            "gap": float(gap), 
-            "spread_base": float(spread_base), 
-            "half_spread_bid": float(half_spread_bid),
-            "half_spread_ask": float(half_spread_ask)
-        },
-        "limit_orders": {
-            "ask_price": float(r_a), 
-            "bid_price": float(r_b), 
-            "delta_a": float(delta_a), 
-            "delta_b": float(delta_b),
-            "delta_a_percent": (delta_a / s) * 100.0, 
-            "delta_b_percent": (delta_b / s) * 100.0
-        }
-    }
 
 
 def get_output_directory():
@@ -217,66 +101,31 @@ def get_output_directory():
     return output_dir
 
 
-def print_summary(results, list_of_periods, output_dir=None):
-    """Print a summary of the results to the terminal."""
-    if not results:
-        print("\n" + "="*80)
-        print("AVELLANEDA-STOIKOV MARKET MAKING PARAMETERS")
-        print("="*80)
-        # FIX: Use ASCII-safe warning symbol
-        print("[WARNING] DATA WARNING: Insufficient data for robust parameter estimation.")
-        print("="*80)
-        return
+def write_results(results, output_dir, tick_size):
+    """Print a summary and write avellaneda_parameters_{TICKER}.json atomically."""
+    md, op, fee = results['market_data'], results['optimal_parameters'], results['maker_fee']
+    s = md['mid_price']
+    hb, ha = half_spreads(op['gamma'], s, md['sigma'], md['k_bid'], md['k_ask'], op['time_horizon_hours'] / 24.0, fee)
 
-    TICKER = results['ticker']
-    H = results['current_state']['analysis_window_hours']
-    ma_window = results['current_state']['ma_window']
-    num_periods = results['current_state']['num_data_periods']
+    print("\n" + "=" * 80)
+    print(f"AVELLANEDA-STOIKOV PARAMETERS - {results['ticker']}  (data up to {results['data_end']})")
+    print("=" * 80)
+    print(f"   sigma (daily): {md['sigma']:.6f}   k_bid: {md['k_bid']:.4f}/$   k_ask: {md['k_ask']:.4f}/$   tick: {tick_size:g}")
+    print(f"   gamma: {op['gamma']:.6g}/$   T (fixed): {op['time_horizon_hours']:.4f} h   maker fee: {fee * 1e4:.1f} bp")
+    print(f"   quotes around mid {s:,.4f}: bid -{hb / s * 1e4:.2f} bp, ask +{ha / s * 1e4:.2f} bp (fee included)")
+    print(f"   periods used: {results['current_state']['num_data_periods']}   trade_enabled: {results['trade_enabled']}")
+    if max(hb, ha) > 49 * tick_size:
+        print(f"   Warning: quotes sit beyond the fitted delta range (49 ticks = {49 * tick_size:g} $); "
+              f"k is extrapolated there.")
 
-    print("\n" + "="*80)
-    print(f"AVELLANEDA-STOIKOV MARKET MAKING PARAMETERS - {TICKER}")
-    print(f"Analysis Period: {H * 60:.1f} minutes ({H:.4f} hours)")
-    if ma_window > 1:
-        print(f"Moving Average Window: {ma_window} periods")
-    print(f"Number of Data Periods: {num_periods}")
-    print("="*80)
-
-    if len(list_of_periods) <= 1:
-        print("[WARNING] DATA WARNING: Insufficient data for robust parameter estimation.")
-        print("="*80)
-
-    print(f"Market Data:")
-    print(f"   Mid Price:                        ${results['market_data']['mid_price']:,.4f}")
-    print(f"   Volatility (sigma):               {results['market_data']['sigma']:.6f}")
-    print(f"   Intensity Bid (A_bid, k_bid):     A={results['market_data']['A_bid']:.4f}, k={results['market_data']['k_bid']:.6f}")
-    print(f"   Intensity Ask (A_ask, k_ask):     A={results['market_data']['A_ask']:.4f}, k={results['market_data']['k_ask']:.6f}")
-    print(f"\nOptimal Parameters:")
-    print(f"   Risk Aversion (gamma): {results['optimal_parameters']['gamma']:.6f}")
-    print(f"   Time Horizon (T):      {results['optimal_parameters']['time_horizon_hours']:.4f} hours")
-    print(f"\nCurrent State:")
-    print(f"   Inventory (q):         {results['current_state']['inventory']:.4f} (Forced to 0)")
-    print(f"\nCalculated Prices:")
-    print(f"   Reservation Price:     ${results['calculated_values']['reservation_price']:.4f}")
-    print(f"   Ask Price:             ${results['limit_orders']['ask_price']:.4f}")
-    print(f"   Bid Price:             ${results['limit_orders']['bid_price']:.4f}")
-    print(f"\nSpreads:")
-    print(f"   Delta Ask:             ${results['limit_orders']['delta_a']:.6f} ({results['limit_orders']['delta_a_percent']:.6f}%)")
-    print(f"   Delta Bid:             ${results['limit_orders']['delta_b']:.6f} ({results['limit_orders']['delta_b_percent']:.6f}%)")
-    print(f"   Total Spread:          {(results['limit_orders']['delta_a_percent'] + results['limit_orders']['delta_b_percent']):.4f}%")
-
-    # Use provided output_dir or get it from environment/default
-    if output_dir is None:
-        output_dir = get_output_directory()
-
-    # Ensure output directory exists
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    json_filename = output_dir / f"avellaneda_parameters_{TICKER}.json"
-    with open(json_filename, 'w') as f:
-        json.dump(results, f, indent=4)
-    print(f"\nResults saved to: {json_filename}")
-    print("="*80)
+    path = output_dir / f"avellaneda_parameters_{results['ticker']}.json"
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(results, indent=4))
+    os.replace(tmp, path)  # atomic: the bot never reads a half-written file
+    print(f"Results saved to: {path}")
+    print("=" * 80)
 
 
 def main():
@@ -300,31 +149,23 @@ def main():
     if ma_window > 1:
         print(f"Using a {ma_window}-period moving average for parameters.")
 
-    # Determine paths
-    script_path = Path(__file__).resolve()
-    script_dir = script_path.parent
-    project_root = script_dir.parent
-
-    # Get output directory for parameter files (consistent across environments)
     output_dir = get_output_directory()
-
-    default_data_dir = project_root / 'HL_data_collector' / 'HL_data'
-
-    print(f"Script directory: {script_dir}")
-    print(f"Project root: {project_root}")
-    print(f"Output directory: {output_dir}")
-
+    default_data_dir = Path(__file__).resolve().parent.parent / 'HL_data_collector' / 'HL_data'
     HL_DATA_DIR = os.getenv('HL_DATA_LOC', str(default_data_dir))
     print(f"Data directory: {HL_DATA_DIR}")
-    
-    # Load data
-    parquet_file_path = os.path.join(HL_DATA_DIR, f'orderbooks_{TICKER}.parquet')
 
+    parquet_file_path = os.path.join(HL_DATA_DIR, f'orderbooks_{TICKER}.parquet')
     if not os.path.exists(parquet_file_path):
         print(f"Error: Parquet file/directory {parquet_file_path} not found!")
         sys.exit(1)
 
     book_df = load_effective_book(parquet_file_path)      # per snapshot: trade-vs-mid distances
+    data_end = book_df.index.max()
+    age_s = time.time() - data_end.timestamp()
+    if age_s > args.max_data_age:
+        print(f"Error: newest order book data is {age_s / 60:.1f} min old (limit {args.max_data_age / 60:.0f} min). "
+              f"Is the collector running?")
+        sys.exit(1)
     mid_price_df = effective_mid_grid(book_df)             # 1-s grid: volatility and backtest
     trades_df = load_trades_data(os.path.join(HL_DATA_DIR, f'trades_{TICKER}.parquet'))
     tick_size = get_tick_size(mid_price_df['mid_price'].iloc[-1])
@@ -377,64 +218,42 @@ def main():
     A_bid_list, k_bid_list, A_ask_list, k_ask_list = calculate_intensity_params(
         list_of_periods, H, buy_trades, sell_trades, delta_list, book_df
     )
-    
-    if len(list_of_periods) <= 1:
-        print_summary({}, list_of_periods, output_dir)
-        sys.exit()
-
-    gamma, time_horizon = optimize_params(
-        list_of_periods, sigma_list, A_bid_list, k_bid_list, A_ask_list, k_ask_list,
-        H, ma_window, mid_price_df, buy_trades, sell_trades, tick_size
+    gamma, trade_enabled, backtest = optimize_params(
+        list_of_periods, H, sigma_list, k_bid_list, k_ask_list, ma_window, mid_price_df, buy_trades, sell_trades
     )
 
-    if pd.isna(gamma):
-        gamma = 0.05
-    if pd.isna(time_horizon):
-        time_horizon = H
-    
-    # Intensity parameters
-    # FIX: Use the most recent values, not second-to-last
-    A_bid = get_smoothed_parameters(A_bid_list, ma_window)
-    k_bid = get_smoothed_parameters(k_bid_list, ma_window)
-    A_ask = get_smoothed_parameters(A_ask_list, ma_window)
-    k_ask = get_smoothed_parameters(k_ask_list, ma_window)
-    
-    # Fallback for intensity params if smoothing returned NaN
-    DEFAULT_A = 1.0
-    DEFAULT_K = 1.5
-    
-    if pd.isna(A_bid):
-        valid_A = [a for a in A_bid_list if pd.notna(a)]
-        A_bid = valid_A[-1] if valid_A else DEFAULT_A
-        print(f"Warning: Using fallback A_bid={A_bid}")
-    
-    if pd.isna(k_bid):
-        valid_k = [k for k in k_bid_list if pd.notna(k)]
-        k_bid = valid_k[-1] if valid_k else DEFAULT_K
-        print(f"Warning: Using fallback k_bid={k_bid}")
-    
-    if pd.isna(A_ask):
-        valid_A = [a for a in A_ask_list if pd.notna(a)]
-        A_ask = valid_A[-1] if valid_A else DEFAULT_A
-        print(f"Warning: Using fallback A_ask={A_ask}")
-    
-    if pd.isna(k_ask):
-        valid_k = [k for k in k_ask_list if pd.notna(k)]
-        k_ask = valid_k[-1] if valid_k else DEFAULT_K
-        print(f"Warning: Using fallback k_ask={k_ask}")
-    
-    # FIX: Sigma - use the most recent value, consistent with other params
-    # The original code used [-2] which seems arbitrary
-    sigma = get_smoothed_parameters(sigma_list, ma_window)
-    if pd.isna(sigma):
-        valid_sigmas = [s for s in sigma_list if pd.notna(s)]
-        sigma = valid_sigmas[-1] if valid_sigmas else 0.01
-        print(f"Warning: Using fallback sigma={sigma}")
+    # Latest estimates, averaged over the last ma_window periods (same smoothing the simulation used)
+    sigma, A_bid, k_bid, A_ask, k_ask = (smooth(x, ma_window).iloc[-1]
+                                         for x in (sigma_list, A_bid_list, k_bid_list, A_ask_list, k_ask_list))
+    if not np.all(np.isfinite([gamma, sigma, k_bid, k_ask])):
+        print("Error: could not estimate sigma, k or gamma from the data; no parameters written.")
+        sys.exit(1)
 
-    # Calculate and display results
-    results = calculate_final_quotes(gamma, time_horizon, sigma, A_bid, k_bid, A_ask, k_ask,
-                                     H, mid_price_df, ma_window, TICKER, len(list_of_periods))
-    print_summary(results, list_of_periods, output_dir)
+    results = {
+        "ticker": TICKER,
+        "timestamp": pd.Timestamp.now(tz='UTC').isoformat(),
+        "data_end": data_end.tz_localize('UTC').isoformat(),
+        "trade_enabled": trade_enabled,
+        "maker_fee": MAKER_FEE,
+        "market_data": {
+            "mid_price": float(mid_price_df['mid_price'].iloc[-1]),
+            "sigma": float(sigma),
+            "A_bid": float(A_bid), "k_bid": float(k_bid),
+            "A_ask": float(A_ask), "k_ask": float(k_ask),
+            "tick_size": float(tick_size),
+        },
+        "optimal_parameters": {
+            "gamma": float(gamma),
+            "time_horizon_hours": float(H),
+        },
+        "current_state": {
+            "analysis_window_hours": H,
+            "ma_window": ma_window,
+            "num_data_periods": len(list_of_periods),
+        },
+        "backtest": backtest,
+    }
+    write_results(results, output_dir, tick_size)
 
 
 if __name__ == "__main__":

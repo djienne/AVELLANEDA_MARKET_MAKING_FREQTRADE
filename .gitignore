@@ -37,5 +37,6 @@ Thumbs.db
 user_data/strategies/log_ave_mm.txt
 user_data/strategies/.avellaneda_last_run.json
 scripts/avellaneda_parameters_*.json
+scripts/avellaneda_parameters_*.tmp
 .claude/settings.local.json
 scripts/.claude/settings.local.json
