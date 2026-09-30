@@ -6,8 +6,6 @@ from warnings import simplefilter
 import numpy as np  # noqa
 import pandas as pd  # noqa
 import sys
-import threading
-from run_avellaneda_param_calculation import run_avellaneda_param_calculation
 from pandas import DataFrame
 from functools import reduce
 import json
@@ -17,13 +15,15 @@ from freqtrade.strategy import (BooleanParameter, CategoricalParameter, DecimalP
                                 IStrategy, IntParameter, stoploss_from_absolute, informative)
 from freqtrade.exchange import timeframe_to_prev_date
 from freqtrade.persistence import Trade, Order
-from datetime import datetime, timezone
+from freqtrade.exceptions import OperationalException
+from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
 # --------------------------------
 # Add your lib to import here
 import math
 from typing import Optional, Tuple
 from dataclasses import dataclass
-from pair_loader import get_active_pair, pair_to_ticker
+from pair_loader import pair_to_ticker
 
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,10 @@ logger = logging.getLogger(__name__)
 # Setup dedicated logger for market making values
 mm_logger = logging.getLogger('market_making_values')
 mm_logger.setLevel(logging.INFO)
-log_file_path = Path(__file__).parent / 'log_ave_mm.txt'
-mm_handler = logging.FileHandler(log_file_path)
-mm_formatter = logging.Formatter('%(asctime)s - %(message)s')
-mm_handler.setFormatter(mm_formatter)
-mm_logger.addHandler(mm_handler)
+if not mm_logger.handlers:  # the module is imported again on /reload_config
+    mm_handler = RotatingFileHandler(Path(__file__).parent / 'log_ave_mm.log', maxBytes=10_000_000, backupCount=3)
+    mm_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+    mm_logger.addHandler(mm_handler)
 mm_logger.propagate = False
 
 pd.set_option('display.max_rows', None)
@@ -107,7 +106,7 @@ def get_params_directory():
     env_path = os.getenv('AVELLANEDA_PARAMS_DIR')
     if env_path:
         params_dir = Path(env_path).resolve()
-        logger.info(f"Using params directory from AVELLANEDA_PARAMS_DIR: {params_dir}")
+        logger.debug(f"Using params directory from AVELLANEDA_PARAMS_DIR: {params_dir}")
         return params_dir
 
     # Fall back to scripts directory relative to project root
@@ -128,7 +127,7 @@ def get_params_directory():
     for path in search_paths:
         resolved = path.resolve()
         if resolved.exists() and resolved.is_dir():
-            logger.info(f"Using params directory: {resolved}")
+            logger.debug(f"Using params directory: {resolved}")
             return resolved
 
     # If scripts/ not found, use current directory as fallback
@@ -136,126 +135,26 @@ def get_params_directory():
     return current_dir
 
 
-def find_upwards(filename: str, start: Path, max_up: int = 10) -> Path:
-    p = start.resolve()
-    for _ in range(max_up + 1):
-        candidate = p / filename
-        if candidate.exists():
-            return candidate
-        if p.parent == p:
-            break
-        p = p.parent
-    raise FileNotFoundError(f"Could not find {filename} from {start}")
-
-
-def log_parameters_summary(params_file: Path, params: dict) -> None:
-    """Log a concise summary of the loaded parameters and spreads."""
-    market_data = params.get('market_data', {})
-    optimal_params = params.get('optimal_parameters', {})
-    limit_orders = params.get('limit_orders', {})
-    calculated_values = params.get('calculated_values', {})
-
-    k_bid = market_data.get('k_bid', market_data.get('k'))
-    k_ask = market_data.get('k_ask', market_data.get('k'))
-    sigma = market_data.get('sigma')
-    gamma = optimal_params.get('gamma')
-    time_horizon_hours = optimal_params.get('time_horizon_hours')
-    mid_price = market_data.get('mid_price') or calculated_values.get('reservation_price')
-
-    delta_b = limit_orders.get('delta_b', calculated_values.get('half_spread_bid'))
-    delta_a = limit_orders.get('delta_a', calculated_values.get('half_spread_ask'))
-    delta_b_percent = limit_orders.get('delta_b_percent')
-    delta_a_percent = limit_orders.get('delta_a_percent')
-    bid_price = limit_orders.get('bid_price')
-    ask_price = limit_orders.get('ask_price')
-
-    logger.info(
-        "Parameter summary | source=%s | gamma=%s | sigma=%s | k_bid=%s | k_ask=%s | horizon_h=%s | mid=%s",
-        params_file,
-        _fmt_optional(gamma),
-        _fmt_optional(sigma),
-        _fmt_optional(k_bid),
-        _fmt_optional(k_ask),
-        _fmt_optional(time_horizon_hours, 4),
-        _fmt_optional(mid_price, 4),
-    )
-    logger.info(
-        "Spread snapshot   | bid=%s (%s%%) | ask=%s (%s%%) | bid_px=%s | ask_px=%s",
-        _fmt_optional(delta_b),
-        _fmt_optional(delta_b_percent, 4),
-        _fmt_optional(delta_a),
-        _fmt_optional(delta_a_percent, 4),
-        _fmt_optional(bid_price, 4),
-        _fmt_optional(ask_price, 4),
-    )
-
-
-def load_configs(start_dir: Path | None = None, max_up: int = 10):
-    """
-    Load Avellaneda parameters from JSON file, searching in multiple locations.
-
-    Args:
-        start_dir: Starting directory for search (defaults to current file's directory)
-        max_up: Maximum levels to search upwards
-
-    Returns:
-        dict: Loaded parameters from JSON file
-
-    Raises:
-        FileNotFoundError: If the parameters file cannot be found
-    """
-    params_dir = get_params_directory()
-
+def load_configs(pair: str) -> dict | None:
+    """Parameters written by scripts/calculate_avellaneda_parameters.py for `pair`; None if missing or unreadable."""
+    params_file = get_params_directory() / f"avellaneda_parameters_{pair_to_ticker(pair)}.json"
     try:
-        active_pair = get_active_pair()
-    except Exception:
-        active_pair = None
-    ticker = pair_to_ticker(active_pair) or "PAXG"
-    param_file_name = f"avellaneda_parameters_{ticker}.json"
-    logger.info(f"Resolving parameters for pair '{active_pair or 'unknown'}' (ticker '{ticker}') using {params_dir}")
+        return json.loads(params_file.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        logger.debug(f"No parameter file yet at {params_file}")
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error(f"Error reading {params_file}: {e}")
+    return None
 
-    params_file = params_dir / param_file_name
 
-    if params_file.exists():
-        try:
-            params_MM = json.loads(params_file.read_text(encoding='utf-8'))
-            logger.info(f"Successfully loaded parameters from: {params_file}")
-            log_parameters_summary(params_file, params_MM)
-            return params_MM
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error reading {params_file}: {e}")
-
-    if start_dir is None:
-        try:
-            start_dir = Path(__file__).resolve().parent
-        except NameError:  # e.g., interactive
-            start_dir = Path(sys.argv[0]).resolve().parent if sys.argv and sys.argv[0] else Path.cwd()
-
-    search_locations = [
-        f"scripts/{param_file_name}",
-        param_file_name,
-        f"user_data/strategies/{param_file_name}",
-        f"../scripts/{param_file_name}",
-        f"../../scripts/{param_file_name}"
-    ]
-
-    for location in search_locations:
-        try:
-            params_file_found = find_upwards(location, start_dir, max_up)
-            params_MM = json.loads(params_file_found.read_text(encoding='utf-8'))
-            logger.info(f"Successfully loaded parameters from: {params_file_found}")
-            log_parameters_summary(params_file_found, params_MM)
-            return params_MM
-        except FileNotFoundError:
-            continue
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error reading {location}: {e}")
-            continue
-
-    raise FileNotFoundError(
-        f"Could not find '{param_file_name}' in any of these locations:\n"
-        f"  - Primary: {params_file}\n"
-        f"  - " + "\n  - ".join(str(start_dir / loc) for loc in search_locations)
+def log_parameters_summary(params: dict) -> None:
+    md, op = params.get('market_data', {}), params.get('optimal_parameters', {})
+    logger.info(
+        "New parameters | computed=%s | data_end=%s | trade_enabled=%s | gamma=%s | sigma=%s | k_bid=%s | k_ask=%s "
+        "| T_h=%s | fee=%s",
+        params.get('timestamp'), params.get('data_end'), params.get('trade_enabled'),
+        _fmt_optional(op.get('gamma')), _fmt_optional(md.get('sigma')), _fmt_optional(md.get('k_bid')),
+        _fmt_optional(md.get('k_ask')), _fmt_optional(op.get('time_horizon_hours'), 4), params.get('maker_fee'),
     )
 
 
@@ -273,9 +172,6 @@ class avellaneda(IStrategy):
     max_entry_position_adjustment = 0
     startup_candle_count: int = 0
 
-    # Minimum number of data collection periods required before trading
-    min_data_periods: int = 3
-    
     minimal_roi = {
         "0": -1
     }
@@ -287,9 +183,9 @@ class avellaneda(IStrategy):
     sigma = None
     time_horizon_hours = None
 
-    fees_HL_maker = 0.02/100.0
-
-    nb_loop = 0
+    maker_fee = 0.0002                        # overwritten by "maker_fee" from the parameter file
+    entries_allowed: Optional[bool] = None    # None until the first parameter load
+    max_param_age = timedelta(hours=1)        # no new entries on parameters from older data
 
     stoploss = -0.85
 
@@ -315,54 +211,39 @@ class avellaneda(IStrategy):
         Called only once after bot instantiation.
         :param **kwargs: Ensure to keep this here so updates to this won't break your strategy.
         """
-
         pairs = self.dp.current_whitelist()
-        if len(pairs)!=1:
-            sys.exit()
-
-        if not self.can_short:
-            logger.info('Running calculation of parameters')
-            symbol = pairs[0].replace("/USDC:USDC","")
-            logger.info(f"Current symbol: {symbol}")
-            run_avellaneda_param_calculation()
-
-        self.params_MM = load_configs()
-        self.gamma = self.params_MM['optimal_parameters']['gamma']
-        self.k_bid = self.params_MM['market_data'].get('k_bid', self.params_MM['market_data'].get('k'))
-        self.k_ask = self.params_MM['market_data'].get('k_ask', self.params_MM['market_data'].get('k'))
-        self.sigma = self.params_MM['market_data']['sigma']
-        # Default to 0.5 hours if not present in older JSONs
-        self.time_horizon_hours = self.params_MM['optimal_parameters'].get('time_horizon_hours', 0.5)
-
-        # Check if we have sufficient data periods
-        num_periods = self.params_MM.get('current_state', {}).get('num_data_periods', 0)
-        if num_periods < self.min_data_periods:
-            logger.warning(f"Insufficient data collected: {num_periods}/{self.min_data_periods} periods. Trading will be disabled until more data is collected.")
-        else:
-            logger.info(f"Sufficient data available: {num_periods} periods collected.")
-        
+        if len(pairs) != 1:
+            raise OperationalException(f"avellaneda trades exactly one pair; whitelist has {len(pairs)}: {pairs}")
+        self._load_params()
 
     def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
-        """
-        Called at the start of the bot iteration (one loop). For each loop, it will run populate_indicators on all pairs.
-        Might be used to perform pair-independent tasks
-        (e.g. gather some remote resource for comparison)
-        :param current_time: datetime object, containing the current datetime
-        :param **kwargs: Ensure to keep this here so updates to this won't break your strategy.
-        """
+        """Parameters are recomputed by the hl-params service (scripts/calculate_avellaneda_parameters.py)."""
+        self._load_params()
 
-        if not self.can_short:
-            if self.nb_loop%10==0:
-                logger.info('Running calculation of parameters')
-                run_avellaneda_param_calculation()
-            self.nb_loop = self.nb_loop + 1
+    def _load_params(self) -> None:
+        """
+        Reload the calculator's JSON; a missing or unreadable file keeps the last good values so open trades can
+        still exit. New entries only if the calculator found an edge on data younger than max_param_age.
+        """
+        params = load_configs(self.dp.current_whitelist()[0])
+        if params and params.get('timestamp') != (self.params_MM or {}).get('timestamp'):
+            try:
+                md, op = params['market_data'], params['optimal_parameters']
+                new = op['gamma'], md['sigma'], md['k_bid'], md['k_ask'], op['time_horizon_hours']
+            except KeyError as e:
+                logger.error(f"Parameter file lacks {e}; keeping previous parameters")
+            else:  # all-or-nothing update
+                self.gamma, self.sigma, self.k_bid, self.k_ask, self.time_horizon_hours = new
+                self.maker_fee, self.params_MM = params.get('maker_fee', self.maker_fee), params
+                log_parameters_summary(params)
 
-        self.params_MM = load_configs()
-        self.gamma = self.params_MM['optimal_parameters']['gamma']
-        self.k_bid = self.params_MM['market_data'].get('k_bid', self.params_MM['market_data'].get('k'))
-        self.k_ask = self.params_MM['market_data'].get('k_ask', self.params_MM['market_data'].get('k'))
-        self.sigma = self.params_MM['market_data']['sigma']
-        self.time_horizon_hours = self.params_MM['optimal_parameters'].get('time_horizon_hours', 0.5)
+        p = self.params_MM or {}
+        age = pd.Timestamp.now(tz='UTC') - pd.Timestamp(p['data_end']) if p.get('data_end') else None
+        allowed = bool(p.get('trade_enabled')) and age is not None and age < self.max_param_age
+        if allowed != self.entries_allowed:
+            why = f"trade_enabled={p.get('trade_enabled')}, data age={age}" if p else "no parameter file yet"
+            logger.info(f"New entries {'enabled' if allowed else 'blocked'} ({why})")
+            self.entries_allowed = allowed
 
     def informative_pairs(self):
         """
@@ -375,20 +256,8 @@ class avellaneda(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        """
-        Only allow entry if we have sufficient data collected by the data collector.
-        """
-        # Check if parameters are loaded and we have enough collected data periods
-        if self.params_MM is not None and self.sigma is not None:
-            # Check if we have enough data periods from the data collector
-            num_periods = self.params_MM.get('current_state', {}).get('num_data_periods', 0)
-            if num_periods >= self.min_data_periods:
-                dataframe.loc[:, 'enter_long'] = 1
-            else:
-                logger.warning(f"Insufficient data periods: {num_periods}/{self.min_data_periods}. Waiting for more data collection.")
-                dataframe.loc[:, 'enter_long'] = 0
-        else:
-            dataframe.loc[:, 'enter_long'] = 0
+        """Enter only while fresh parameters show an edge (see _load_params); exits are never blocked."""
+        dataframe.loc[:, 'enter_long'] = int(bool(self.entries_allowed))
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -465,13 +334,9 @@ class avellaneda(IStrategy):
             return None
         
         mid_price = self.get_mid_price(pair, proposed_rate)
-        symbol = pair.replace("/USDC:USDC","")
-        open_trades = Trade.get_open_trades()
-        total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
-        total_capital = self.wallets.get_total(self.config['stake_currency'])
-        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        q_inventory_exposure = 0.0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
+        # Inventory term off (q = 0): long-only, one position; scripts/backtest.py simulates exactly this
+        r_buy, r_sell = calculate_optimal_spreads(mid_price, self.sigma, self.k_bid, self.k_ask, self.gamma,
+                                                  self.time_horizon_hours / 24.0, 0.0, self.maker_fee)
 
         return r_buy
 
@@ -486,36 +351,11 @@ class avellaneda(IStrategy):
             return None
 
         mid_price = self.get_mid_price(pair, proposed_rate)
-        symbol = pair.replace("/USDC:USDC","")
-        open_trades = Trade.get_open_trades()
-        total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
-        total_capital = self.wallets.get_total(self.config['stake_currency'])
-        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        q_inventory_exposure = 0.0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
+        # Inventory term off (q = 0): long-only, one position; scripts/backtest.py simulates exactly this
+        r_buy, r_sell = calculate_optimal_spreads(mid_price, self.sigma, self.k_bid, self.k_ask, self.gamma,
+                                                  self.time_horizon_hours / 24.0, 0.0, self.maker_fee)
 
         return r_sell
-
-    def adjust_entry_price(self, trade: Trade, order: Order, pair: str,
-                            current_time: datetime, proposed_rate: float, current_order_rate: float,
-                            entry_tag: str, side: str, **kwargs) -> float:
-        
-        if self.sigma is None or self.gamma is None or self.params_MM is None:
-            return None
-
-        if trade.is_short:
-            return None
-        
-        mid_price = self.get_mid_price(pair, proposed_rate)
-        symbol = pair.replace("/USDC:USDC","")
-        open_trades = Trade.get_open_trades()
-        total_quote_position = sum([float(trade.open_rate) * float(trade.amount) for trade in open_trades])
-        total_capital = self.wallets.get_total(self.config['stake_currency'])
-        # q_inventory_exposure = total_quote_position / total_capital if total_capital > 0 else 0
-        q_inventory_exposure = 0.0
-        r_buy, r_sell = calculate_optimal_spreads(mid_price,self.sigma,self.k_bid,self.k_ask,self.gamma,self.time_horizon_hours/24.0,q_inventory_exposure,self.fees_HL_maker)
-
-        return r_buy
 
     def custom_exit(self, pair: str, trade: Trade, current_time: datetime, current_rate: float,
                     current_profit: float, **kwargs):

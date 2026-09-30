@@ -31,6 +31,27 @@ services:
       --config /freqtrade/user_data/config.json
       --strategy avellaneda
 
+  # === Avellaneda parameters: recomputed from the collector's data every 15 min, off the bot loop ===
+  hl-params:
+    image: freqtradeorg/freqtrade:2025.7
+    build:
+      context: .
+      dockerfile: "./Dockerfile.technical"
+    restart: unless-stopped
+    container_name: hl-params
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+      - "./scripts:/freqtrade/scripts"
+      - "./HL_data_collector:/freqtrade/HL_data_collector"
+    environment:
+      - HL_DATA_LOC=/freqtrade/HL_data_collector/HL_data/
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    entrypoint: ["sh", "-c", "while true; do python /freqtrade/scripts/calculate_avellaneda_parameters.py || true; sleep 900; done"]
+
   # === HL Data Collector ===
   hl-collector:
     build:

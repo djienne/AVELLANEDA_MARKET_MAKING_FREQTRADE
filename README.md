@@ -7,16 +7,15 @@ A sophisticated market making system built on Freqtrade, implementing the Avella
 Reliable sigma (volatility), k (order flow intensity), and gamma (risk aversion) parameters are crucial for this strategy. The included data in `HL_data_collector/HL_data` is only a small sample. You **must** collect your own data for at least a few days to obtain accurate parameter estimations.
 
 The system is designed to be self-sufficient:
-1. Run `docker-compose build` and `docker-compose up` to start both data collection and trading.
-2. Initially, the trading bot will use inaccurate parameters.
-3. The Avellaneda parameter sets are automatically recalculated **at most once every 15 minutes** (rate-limited). The strategy triggers recalculation every 10 bot loops (~150 seconds with a 15 seconds `process_throttle_secs`), and a lock file prevents running more frequently than once per 15 minutes. After a couple of days, the parameters will become more reliable.
-4. You can either let the system run continuously or, for a fresh start with better parameters, stop the services (`docker-compose down`), delete the `tradesv3.sqlite` database, and restart (`docker-compose up`).
+1. Run `docker-compose build` and `docker-compose up` to start data collection, parameter calculation and trading.
+2. The `hl-params` service recalculates the parameters every 15 minutes from the last 24 h of collected data. It needs at least 45 minutes of data before it writes a first parameter file.
+3. The bot opens new trades only while the parameter file is less than 1 hour old **and** the calculator measured a positive edge (see [Parameter Estimation](#parameter-estimation)). Otherwise it logs `New entries blocked` and only manages exits; dry-run behaves the same. Expect it to be blocked often: that is the honest answer when the data shows no edge.
 
 ## Overview
 
 This project implements an advanced market making strategy for Hyperliquid, dynamically calculating optimal bid-ask spreads using the Avellaneda-Stoikov model with real-time parameter estimation.
 
-**Current Configuration:** The included configuration is set to trade PAXG/USDC. The system includes pre-calculated parameters for two trading pairs: PAXG and ETH. To switch trading pairs, change `exchange.pair_whitelist` in `user_data/config.json`; the strategy and parameter tooling will pick up the first pair and look for `avellaneda_parameters_{TICKER}.json` automatically.
+**Current Configuration:** The included configuration is set to trade PAXG/USDC. Parameter files `avellaneda_parameters_{TICKER}.json` are generated at runtime (not committed). To switch trading pairs, change `exchange.pair_whitelist` in `user_data/config.json`; the strategy and the calculator pick up the first pair.
 
 **💰 Support this project**:
 - **Hyperliquid**: Sign up with [this referral link](https://app.hyperliquid.xyz/join/FREQTRADE) for 10% fee reduction
@@ -28,16 +27,16 @@ ADVANCED_MM/
 |-- user_data/
 |   |-- strategies/
 |   |   |-- avellaneda.py             # Main Avellaneda-Stoikov strategy
-|   |   `-- run_avellaneda_param_calculation.py # Parameter calculation runner
+|   |   `-- pair_loader.py            # Active pair from config.json
 |   |-- config.json                   # Freqtrade configuration
 |   `-- [other standard freqtrade dirs] # backtest_results/, data/, logs/, etc.
 |-- scripts/
 |   |-- calculate_avellaneda_parameters.py # Unified parameter calculation
-|   |-- avellaneda_parameters_PAXG.json # Pre-calculated parameters for PAXG
-|   |-- avellaneda_parameters_ETH.json  # Pre-calculated parameters for ETH
-|   |-- backtest.py                   # Backtesting for parameter optimization
+|   |-- backtest.py                   # Simulates the deployed bot to choose gamma
 |   |-- volatility.py                 # Volatility calculation (GARCH model)
 |   |-- intensity.py                  # Order flow intensity estimation (MLE)
+|   |-- utils.py                      # Data loading, effective mid-price, tick size
+|   |-- check_pipeline.py             # Runnable checks: python scripts/check_pipeline.py
 |   |-- Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook
 |   `-- requirements.txt              # Python dependencies
 |-- HL_data_collector/
@@ -65,10 +64,12 @@ The project uses Docker and Docker Compose for containerization and orchestratio
 * Build the Docker images: `docker-compose build`
 * Start the trading bot and data collector: `docker-compose up`
 
-The `docker-compose.yml` file defines two services:
+The `docker-compose.yml` file defines three services:
 
-* `freqtrade_mm`: This service runs the trading bot. It uses the `freqtradeorg/freqtrade:2025.7` image and mounts the `user_data`, `scripts`, and `HL_data_collector` directories. The command shows that it runs the `avellaneda` strategy with the configuration from `user_data/config.json`.
-* `hl-collector`: This service runs the data collector. It builds a Docker image from `HL_data_collector/Dockerfile` and runs the `run_collector.py` script.
+* `freqtrade_mm`: the trading bot (`avellaneda` strategy, `user_data/config.json`). It only reads the parameter file.
+* `hl-params`: runs `scripts/calculate_avellaneda_parameters.py` every 15 minutes, on the same image. Outside Docker, run the equivalent loop yourself:
+  `while true; do python scripts/calculate_avellaneda_parameters.py; sleep 900; done`
+* `hl-collector`: records Hyperliquid trades and order books to `HL_data_collector/HL_data` (files rotate every 5 minutes; set `SYMBOLS` to include your pair).
 
 ## Configuration
 
@@ -78,6 +79,7 @@ The main configuration for the Freqtrade bot is in the `user_data/config.json` f
 * "stake_currency": "USDC" - The currency used for trading.
 * "stake_amount": 50 - The amount of stake currency to use for each trade.
 * "dry_run": true - The bot is running in simulation mode.
+* "fee": 0.0002 - Maker fee used for dry-run accounting. Same 2 bp as the simulation and the strategy (`MAKER_FEE` in `scripts/backtest.py`, passed to the bot through the parameter file).
 * "trading_mode": "futures" - The bot is trading futures contracts.
 * "exchange.name": "hyperliquid" - The exchange to trade on.
 * "exchange.pair_whitelist": ["PAXG/USDC:USDC"] - The trading pair to use.
@@ -102,63 +104,35 @@ The strategy implements the classical Avellaneda-Stoikov optimal market making m
 
 **Core Model Elements:**
 
-The bid/ask spread is defined as:
+The bot quotes each side at a distance from the mid-price `s`:
 
 ```
-spread = gamma * sigma**2 * T + (2 / gamma) * ln(1 + gamma / k)
-```
-
-This spread is centered around a reservation price `r`, which is the price at which a market maker is indifferent to buying or selling another share.
-
-```
-reservation price r = s - q * gamma * sigma**2 * T
-
-gap = |r - s|
+half_spread = 0.5 * gamma * (sigma * s)**2 * T + (1 / gamma) * ln(1 + gamma / k) + fee * s
+buy_price   = s - half_spread(k_bid)
+sell_price  = s + half_spread(k_ask)
 ```
 
 Where:
-- `s`: mid-price of the asset
-- `sigma`: volatility of the asset
-- `k`: intensity of the arrival of orders
-- `gamma`: risk factor, optimized via backtests over the entire historical data, alongside the time horizon
-- `T`: optimized fixed time horizon (in hours), representing the urgency to liquidate inventory
-- `q`: number of assets held in inventory (forced to 0 for neutral pricing)
-
-And the final best buy and sell limit order prices:
-
-```
-buy_price = r - delta_b
-sell_price = r + delta_a
-```
-
-If r >= s:
-
-```
-delta_a = spread/2 + gap
-delta_b = spread/2 - gap
-```
-
-If r < s:
-
-```
-delta_a = spread/2 - gap
-delta_b = spread/2 + gap
-```
+- `s`: effective mid-price (price levels where $1000 of depth is reached on each side)
+- `sigma`: daily volatility of log returns; `sigma * s` converts it to $
+- `k`: decay of the fill intensity with distance from mid, `lambda(delta) = A * exp(-k * delta)`, in 1/$
+- `gamma`: risk aversion, in 1/$
+- `T`: time horizon in days, fixed to the 15-minute analysis window. Only `gamma * T` enters the first term, so `gamma` alone is tuned.
+- The reservation price equals `s`: the inventory term `q * gamma * (sigma * s)**2 * T` is off (q = 0), because the bot is long-only with one position at a time (buy at the bid, then sell at the ask).
 
 ### Parameter Estimation
 
-Parameters are recalculated automatically, rate-limited to **at most once every 15 minutes**:
+The `hl-params` service recalculates everything every 15 minutes from the last 24 h of data (50 chunks of 15 minutes). It refuses to run if the newest order book data is more than 10 minutes old (collector down); `--max-data-age` overrides this for offline analysis.
 
-**Recalculation Mechanism:**
-- The strategy attempts to trigger recalculation every 10 bot loops (~150 seconds with 15-seconds `process_throttle_secs`).
-- A lock file (`.avellaneda_last_run.json`) prevents execution if parameters were calculated within the last 15 minutes.
-- This ensures parameters update regularly while preventing excessive computation.
+- **sigma:** GARCH(1,1) on 1-second log returns; a rolling standard deviation is used where GARCH fails or disagrees by more than 2x.
+- **k, A:** Poisson maximum likelihood on how far taker trades walked from the mid-price. Each trade is compared with the book snapshot strictly before it, on the exchange clock.
+- **gamma:** chosen by simulating the deployed bot on the recorded trades. The simulation holds one unit, long-only, alternating bid and ask, re-quoted every 15 s (`process_throttle_secs`) with the formula above. It uses the fee and the sigma and k from earlier periods only. An order fills when a taker trades strictly through it.
+- **Edge and `trade_enabled`:** edge is the simulated PnL minus `mean(position) * price change`, which removes what a long-only bot earns or loses from the trend alone. `trade_enabled` is true only if the chosen gamma has a positive edge over the full window **and** the gamma chosen on the first 2/3 of the window keeps a positive edge on the last 1/3. The per-gamma fills and edges are saved in the parameter file under `backtest`.
 
-**Parameter Calculations:**
-- **gamma (Risk Aversion):** Optimized via backtests over the entire historical data, alongside the time horizon.
-- **T (Time Horizon):** Optimized via backtests over the entire historical data, alongside the risk aversion parameter.
-- **k (Order Flow Intensity):** Estimated using Maximum Likelihood Estimation (MLE) on raw fill counts for robustness.
-- **sigma (Volatility):** Calculated using a GARCH(1,1) model to capture volatility clustering. A rolling window standard deviation of price movements is used as a fallback if the GARCH model fails or if there is insufficient data.
+**Limits to keep in mind**
+- Freqtrade's dry run fills a limit order only when the top of the book crosses it at a loop instant. The simulation fills on any trade through the price, which is how the live exchange behaves. So dry-run PnL cannot validate the simulation.
+- A few hours of data give few fills; `trade_enabled` is a noisy, deliberately conservative decision.
+- When quotes sit far beyond the fitted distance range (49 ticks), k is extrapolated; the calculator prints a warning.
 
 ## Disclaimer
 

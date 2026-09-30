@@ -1,14 +1,14 @@
 ﻿# Repository Guidelines
 
 ## Project Structure & Module Organization
-- `scripts/` contains parameter calculators/backtesting (`calculate_avellaneda_parameters.py`, `volatility.py`, `intensity.py`) writing `avellaneda_parameters_{TICKER}.json` to `scripts/` unless `AVELLANEDA_PARAMS_DIR` is set.
-- `user_data/` hosts Freqtrade config (`config.json`, `config_short.json`), strategy logic in `strategies/avellaneda.py`, and runtime artifacts (`logs/`, `tradesv3.sqlite`, `data/`, `hyperopt_results/`).
+- `scripts/` contains the parameter calculator (`calculate_avellaneda_parameters.py`, `volatility.py`, `intensity.py`, `backtest.py` which simulates the deployed bot) writing `avellaneda_parameters_{TICKER}.json` to `scripts/` unless `AVELLANEDA_PARAMS_DIR` is set.
+- `user_data/` hosts Freqtrade config (`config.json`), strategy logic in `strategies/avellaneda.py`, and runtime artifacts (`logs/`, `tradesv3.sqlite`, `data/`, `hyperopt_results/`).
 - `HL_data_collector/` captures Hyperliquid streams via `run_collector.py`, persisting parquet files under `HL_data_collector/HL_data/`.
-- Root utilities: `docker-compose.yml` wires `freqtrade_mm` + `hl-collector`; `Dockerfile.technical` extends the bot image; `show_PnL.py` and `test_env.py` are local diagnostics.
+- Root utilities: `docker-compose.yml` wires `freqtrade_mm` + `hl-params` (recalculates parameters every 15 min) + `hl-collector`; API credentials come from a gitignored `.env`; `Dockerfile.technical` extends the bot image; `show_PnL.py` and `test_env.py` are local diagnostics.
 
 ## Build, Test, and Development Commands
 - `docker-compose build` builds the freqtrade bot image (with `Dockerfile.technical`) and the collector.
-- `docker-compose up` starts the bot (using `user_data/config.json` + `strategies/avellaneda.py`) and the data collector with persistent host volumes; use `docker-compose down` to stop/clean containers.
+- `docker-compose up` starts the bot (using `user_data/config.json` + `strategies/avellaneda.py`), the parameter service and the data collector with persistent host volumes; use `docker-compose down` to stop/clean containers.
 - `python scripts/calculate_avellaneda_parameters.py PAXG --minutes 15` recomputes Avellaneda parameters from `HL_data_collector/HL_data` and emits `scripts/avellaneda_parameters_PAXG.json`; override output with `AVELLANEDA_PARAMS_DIR`.
 - `python HL_data_collector/run_collector.py` runs the collector outside Docker; configure with `SYMBOLS`, `OUTPUT_DIR`, and `ORDERBOOK_DEPTH` env vars.
 - `python test_env.py` quickly verifies key numeric dependencies; `python show_PnL.py` inspects stored trades.
@@ -20,6 +20,7 @@
 - Log with the existing `logging` setup; avoid ad-hoc prints in strategy code.
 
 ## Testing Guidelines
+- Run `python scripts/check_pipeline.py` after touching `scripts/` or the strategy's quote formula (known-truth, reference and end-to-end checks; ~10 s).
 - When modifying parameter generation, run `python scripts/calculate_avellaneda_parameters.py ETH` and confirm the summary plus JSON output looks sane.
 - For end-to-end validation, start `docker-compose up` in dry-run mode and watch `user_data/logs/` for clean startup (no stack traces).
 
