@@ -58,7 +58,8 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
                 sells_reset, 
                 mids_reset[['datetime', 'mid_price']], 
                 on='datetime', 
-                direction='backward'
+                direction='backward',
+                allow_exact_matches=False  # book strictly before the trade, never the book it moved
             )
             
             # Calculate distance from mid
@@ -84,7 +85,8 @@ def calculate_intensity_params(list_of_periods, H, buy_orders, sell_orders, delt
                 buys_reset, 
                 mids_reset[['datetime', 'mid_price']], 
                 on='datetime', 
-                direction='backward'
+                direction='backward',
+                allow_exact_matches=False  # book strictly before the trade, never the book it moved
             )
             
             merged_buys['distance'] = merged_buys['price'] - merged_buys['mid_price']

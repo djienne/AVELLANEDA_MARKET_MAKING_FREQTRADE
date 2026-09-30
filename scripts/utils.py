@@ -1,20 +1,22 @@
 
 import pandas as pd
 import numpy as np
+import math
 import os
 import sys
+import time
 from pathlib import Path
 
-def get_tick_size(ticker):
-    """Get tick size based on the ticker symbol."""
-    tick_sizes = {
-        'BTC': 1.0,
-        'ETH': 0.1,
-        'SOL': 0.01,
-        'WLFI': 0.0001,
-        'PAXG': 0.01,
-    }
-    return tick_sizes.get(ticker, 0.01)
+def get_tick_size(price):
+    """Hyperliquid perp tick: prices keep at most 5 significant figures, integer prices always allowed.
+    Ponytail: ignores the (6 - szDecimals) max-decimals cap, which only binds for coins priced well below $1."""
+    return min(1.0, 10.0 ** (math.floor(math.log10(price)) - 4))
+
+
+# Only files written in the last 24 h are read: the 50 x 15-min chunks need 12.5 h, the rest is GARCH history.
+# Ponytail: relies on file mtime (collector rotates files every 5 min); if data is copied without
+# preserving mtimes, nothing is filtered and run time grows with history again.
+LOOKBACK_S = 24 * 3600
 
 
 def safe_read_parquet(path):
@@ -32,9 +34,10 @@ def safe_read_parquet(path):
 
     elif path_obj.is_dir():
         dfs = []
-        files = list(path_obj.glob("*.parquet"))
+        cutoff = time.time() - LOOKBACK_S
+        files = sorted(p for p in path_obj.glob("*.parquet") if p.stat().st_mtime >= cutoff)
         if not files:
-            raise ValueError(f"No parquet files found in {path}")
+            raise ValueError(f"No parquet files modified in the last {LOOKBACK_S / 3600:.0f} h in {path}")
              
         for p in files:
             try:
@@ -42,12 +45,9 @@ def safe_read_parquet(path):
                 if not df.empty:
                     dfs.append(df)
             except Exception as e:
-                msg = str(e)
-                if "Magic bytes not found" in msg:
-                     # Silent skip for active files in directory scan to avoid spam
-                     pass 
-                else:
-                     print(f"Warning: Skipping potentially incomplete/corrupted file: {p.name}. Error: {e}")
+                # The file the collector is still writing has no footer yet ("magic bytes not found"): skip quietly
+                if "magic bytes" not in str(e).lower():
+                    print(f"Warning: Skipping potentially incomplete/corrupted file: {p.name}. Error: {e}")
                 continue
         
         if not dfs:
@@ -57,6 +57,18 @@ def safe_read_parquet(path):
 
     else:
         raise ValueError(f"Path not found: {path}")
+
+
+def event_time(df):
+    """
+    Exchange (block) time in ms where recorded, else local receive time. Trades and book snapshots then share
+    one clock, so "the book strictly before a trade" holds even when websocket messages arrive out of order.
+    """
+    local = pd.to_datetime(df['timestamp'], unit='s')
+    if 'exchange_timestamp' not in df.columns:
+        return local.astype('datetime64[ns]')
+    exchange = pd.to_datetime(pd.to_numeric(df['exchange_timestamp'], errors='coerce'), unit='ms')
+    return exchange.fillna(local).astype('datetime64[ns]')
 
 
 def load_trades_data(parquet_path):
@@ -78,81 +90,37 @@ def load_trades_data(parquet_path):
     else:
         df = df.drop_duplicates()
 
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+    df['datetime'] = event_time(df)
     df = df.set_index('datetime')
     df = df.sort_index()
     return df
 
 
-def calculate_effective_prices(row, threshold=1000):
+def effective_side_price(df, side, threshold=1000):
     """
-    Calculate effective bid and ask prices based on cumulative volume threshold.
+    Per snapshot: price of the first level where cumulative notional (price * size) reaches `threshold`,
+    scanning at most 20 levels and stopping at the first missing level. Falls back to the best level
+    when the visible book is thinner than `threshold`.
     """
-    # Effective Bid
-    effective_bid = np.nan
-    cum_value = 0.0
-    
-    for i in range(20):
-        price_col = f'bid_price_{i}'
-        size_col = f'bid_size_{i}'
-        
-        if price_col not in row or size_col not in row:
-            break
-            
-        price = row[price_col]
-        size = row[size_col]
-        
-        if pd.isna(price) or pd.isna(size):
-            break
-            
-        value = price * size
-        cum_value += value
-        
-        if cum_value >= threshold:
-            effective_bid = price
-            break
-            
-    # Fallback to best bid if threshold not reached but some liquidity exists
-    if pd.isna(effective_bid) and 'bid_price_0' in row and pd.notna(row['bid_price_0']):
-        effective_bid = row['bid_price_0']
-
-    # Effective Ask
-    effective_ask = np.nan
-    cum_value = 0.0
-    
-    for i in range(20):
-        price_col = f'ask_price_{i}'
-        size_col = f'ask_size_{i}'
-        
-        if price_col not in row or size_col not in row:
-            break
-            
-        price = row[price_col]
-        size = row[size_col]
-        
-        if pd.isna(price) or pd.isna(size):
-            break
-            
-        value = price * size
-        cum_value += value
-        
-        if cum_value >= threshold:
-            effective_ask = price
-            break
-            
-    # Fallback to best ask
-    if pd.isna(effective_ask) and 'ask_price_0' in row and pd.notna(row['ask_price_0']):
-        effective_ask = row['ask_price_0']
-        
-    return pd.Series({'price_bid': effective_bid, 'price_ask': effective_ask})
+    n = 0
+    while n < 20 and f'{side}_price_{n}' in df.columns and f'{side}_size_{n}' in df.columns:
+        n += 1
+    if n == 0:
+        raise ValueError(f"No {side} levels in order book data")
+    p = df[[f'{side}_price_{i}' for i in range(n)]].to_numpy(float)
+    v = p * df[[f'{side}_size_{i}' for i in range(n)]].to_numpy(float)
+    ok = np.cumprod(~np.isnan(v), axis=1).astype(bool)          # levels before the first missing one
+    hit = ok & (np.cumsum(np.where(ok, v, 0.0), axis=1) >= threshold)
+    return np.where(hit.any(axis=1), p[np.arange(len(p)), hit.argmax(axis=1)], p[:, 0])
 
 
-def load_effective_mid_price(parquet_path, threshold=1000):
+def load_effective_book(parquet_path, threshold=1000):
     """
-    Load orderbook data and calculate effective mid-price based on depth.
+    One row per order book snapshot (event time): depth-weighted bid/ask at `threshold` notional and their mid.
+    Use this, not the 1-s grid, to find the book state just before a trade.
     """
     df = safe_read_parquet(parquet_path)
-    
+
     if df.empty:
         raise ValueError(f"Parquet file at {parquet_path} is empty or all files were skipped.")
 
@@ -162,31 +130,29 @@ def load_effective_mid_price(parquet_path, threshold=1000):
         else:
             raise ValueError(f"Parquet file at {parquet_path} missing 'timestamp' column.")
 
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-    df = df.sort_values('datetime')
-    df = df.set_index('datetime')
-    
-    # Calculate effective prices
-    # This might be slow for very large datasets, but acceptable for 15 min chunks
-    effective_prices = df.apply(lambda row: calculate_effective_prices(row, threshold), axis=1)
-    
-    # Resample to 1s
-    merged = effective_prices.resample('s').last().ffill()
-    
-    # Staleness check
-    MAX_STALE_SECONDS = 60
-    
-    for col in ['price_bid', 'price_ask']:
-        # Check original data presence (resampled to seconds)
-        has_data = effective_prices[col].notna().resample('s').max().fillna(0).astype(bool)
-        original_mask = has_data.reindex(merged.index, fill_value=False)
-        stale_count = (~original_mask).groupby((original_mask).cumsum()).cumcount()
-        merged.loc[stale_count > MAX_STALE_SECONDS, col] = np.nan
-        
-    merged['mid_price'] = (merged['price_bid'] + merged['price_ask']) / 2
-    merged.dropna(inplace=True)
-    
-    if merged.empty:
+    book = pd.DataFrame({'price_bid': effective_side_price(df, 'bid', threshold),
+                         'price_ask': effective_side_price(df, 'ask', threshold)},
+                        index=pd.DatetimeIndex(event_time(df), name='datetime'))
+    book['mid_price'] = (book['price_bid'] + book['price_ask']) / 2
+    book = book.dropna().sort_index()
+
+    if book.empty:
         raise ValueError("No valid effective mid-price data after processing.")
-        
-    return merged
+    return book
+
+
+def effective_mid_grid(book, max_stale_s=60):
+    """
+    1-s grid of the book. label='right', closed='left': the value at time t is the last state strictly before t
+    (causal). Seconds more than `max_stale_s` after the last update are dropped instead of forward-filled.
+    """
+    r = book.resample('s', label='right', closed='left')
+    grid = r.last().ffill()
+    fresh = r['mid_price'].count() > 0
+    stale_s = (~fresh).groupby(fresh.cumsum()).cumcount()
+    return grid[stale_s <= max_stale_s].dropna()
+
+
+def load_effective_mid_price(parquet_path, threshold=1000):
+    """Effective mid-price on a 1-s grid (see effective_mid_grid)."""
+    return effective_mid_grid(load_effective_book(parquet_path, threshold))

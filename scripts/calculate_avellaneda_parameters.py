@@ -26,7 +26,7 @@ except Exception as exc:
     pair_to_ticker = lambda pair: (pair or "").split("/")[0].split(":")[0].upper()
 
 # Import from modules
-from utils import get_tick_size, load_trades_data, load_effective_mid_price
+from utils import get_tick_size, load_trades_data, load_effective_book, effective_mid_grid
 from volatility import calculate_volatility
 from intensity import calculate_intensity_params
 from backtest import optimize_params
@@ -300,9 +300,6 @@ def main():
     if ma_window > 1:
         print(f"Using a {ma_window}-period moving average for parameters.")
 
-    tick_size = get_tick_size(TICKER)
-    delta_list = np.arange(tick_size, 50.0 * tick_size, tick_size)
-
     # Determine paths
     script_path = Path(__file__).resolve()
     script_dir = script_path.parent
@@ -327,8 +324,12 @@ def main():
         print(f"Error: Parquet file/directory {parquet_file_path} not found!")
         sys.exit(1)
 
-    mid_price_df = load_effective_mid_price(parquet_file_path)
+    book_df = load_effective_book(parquet_file_path)      # per snapshot: trade-vs-mid distances
+    mid_price_df = effective_mid_grid(book_df)             # 1-s grid: volatility and backtest
     trades_df = load_trades_data(os.path.join(HL_DATA_DIR, f'trades_{TICKER}.parquet'))
+    tick_size = get_tick_size(mid_price_df['mid_price'].iloc[-1])
+    delta_list = np.arange(tick_size, 50.0 * tick_size, tick_size)
+    print(f"Tick size (5 significant figures at last mid): {tick_size}")
     buy_trades = trades_df[trades_df['side'] == 'buy'].copy()
     sell_trades = trades_df[trades_df['side'] == 'sell'].copy()
     print(f"Loaded {len(mid_price_df)} data points from {mid_price_df.index.min()} to {mid_price_df.index.max()}.")
@@ -374,7 +375,7 @@ def main():
     # Calculate parameters
     sigma_list = calculate_volatility(mid_price_df, H, list_of_periods)
     A_bid_list, k_bid_list, A_ask_list, k_ask_list = calculate_intensity_params(
-        list_of_periods, H, buy_trades, sell_trades, delta_list, mid_price_df
+        list_of_periods, H, buy_trades, sell_trades, delta_list, book_df
     )
     
     if len(list_of_periods) <= 1:

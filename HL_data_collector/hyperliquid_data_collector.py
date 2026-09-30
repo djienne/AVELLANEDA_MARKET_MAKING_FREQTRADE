@@ -145,11 +145,12 @@ class HyperliquidDataCollector:
     # Buffer capacity warning threshold (80%)
     BUFFER_WARNING_THRESHOLD = 0.8
     
-    def __init__(self, symbols: List[str], output_dir: str = "data", orderbook_depth: int = 20, rotation_interval: int = 900):
+    def __init__(self, symbols: List[str], output_dir: str = "data", orderbook_depth: int = 20, rotation_interval: int = 300):
         self.symbols = [s.upper() for s in symbols]  # FIX: Normalize to uppercase
         self.output_dir = output_dir
         self.orderbook_depth = orderbook_depth
-        self.rotation_interval = rotation_interval  # Default 15 minutes
+        # The open file has no parquet footer and is unreadable, so readers lag by up to this interval (5 min)
+        self.rotation_interval = rotation_interval
 
         self.info = None
         self.stats = DataStats()
