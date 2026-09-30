@@ -32,3 +32,10 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Generated at runtime
+user_data/strategies/log_ave_mm.txt
+user_data/strategies/.avellaneda_last_run.json
+scripts/avellaneda_parameters_*.json
+.claude/settings.local.json
+scripts/.claude/settings.local.json

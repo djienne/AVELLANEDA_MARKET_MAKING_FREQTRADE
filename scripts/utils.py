@@ -29,19 +29,7 @@ def safe_read_parquet(path):
         except Exception as e:
             print(f"Warning: Failed to read {path}. Skipping. Error: {e}")
             return pd.DataFrame()
-            
-    if path_obj.is_file():
-        try:
-            return pd.read_parquet(path)
-        except Exception as e:
-            msg = str(e)
-            if "Magic bytes not found" in msg:
-                 print(f"Warning: Failed to read {path}. This might be an active file currently being written to. Skipping.")
-            else:
-                 print(f"Warning: Failed to read {path}. Skipping. Error: {e}")
-            return pd.DataFrame()
 
-            
     elif path_obj.is_dir():
         dfs = []
         files = list(path_obj.glob("*.parquet"))
@@ -94,76 +82,6 @@ def load_trades_data(parquet_path):
     df = df.set_index('datetime')
     df = df.sort_index()
     return df
-
-
-def load_and_resample_mid_price(parquet_path):
-    """Load and resample mid-price data from a Parquet file/directory."""
-    df = safe_read_parquet(parquet_path)
-
-    
-    if df.empty:
-        raise ValueError(f"Parquet file at {parquet_path} is empty or all files were skipped.")
-
-    if 'timestamp' not in df.columns:
-        if 'timestamp' in df.index.names:
-            df = df.reset_index()
-        else:
-            raise ValueError(f"Parquet file at {parquet_path} missing 'timestamp' column. Available columns: {df.columns.tolist()}")
-
-    # FIX: Add deduplication for prices data
-    # Remove duplicate timestamps per side, keeping the last value
-    df = df.drop_duplicates(subset=['timestamp', 'side'], keep='last')
-
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-    df = df.sort_values('datetime')
-    
-    # FIX: Validate that 'side' column contains expected values
-    valid_sides = {'bid', 'ask'}
-    actual_sides = set(df['side'].unique())
-    if not actual_sides.intersection(valid_sides):
-        raise ValueError(f"'side' column must contain 'bid' and/or 'ask'. Found: {actual_sides}")
-    
-    missing_sides = valid_sides - actual_sides
-    if missing_sides:
-        print(f"Warning: Missing sides in data: {missing_sides}")
-    
-    pivot_df = df.pivot_table(index='datetime', columns='side', values='price', aggfunc='last')
-    
-    # FIX: Check that required columns exist after pivot
-    if 'bid' not in pivot_df.columns or 'ask' not in pivot_df.columns:
-        raise ValueError(f"Pivot table missing required columns. Available: {pivot_df.columns.tolist()}")
-    
-    pivot_df.rename(columns={'bid': 'price_bid', 'ask': 'price_ask'}, inplace=True)
-    
-    # FIX: Only forward-fill once after resampling to avoid propagating stale data too far
-    merged = pivot_df.resample('s').ffill()
-    
-    # FIX: Add a staleness check - don't forward fill beyond a threshold
-    # Calculate time since last valid observation
-    MAX_STALE_SECONDS = 60  # Don't trust data older than 60 seconds
-    
-    for col in ['price_bid', 'price_ask']:
-        # Create a mask of original (non-ffilled) values
-        # Resample the boolean notna() mask to seconds, taking max() (True if any update in that second)
-        has_data_in_second = pivot_df[col].notna().resample('s').max().fillna(0).astype(bool)
-        
-        # Align with merged index
-        original_mask = has_data_in_second.reindex(merged.index, fill_value=False)
-        
-        # Count consecutive NaNs (ffilled values)
-        stale_count = (~original_mask).groupby((original_mask).cumsum()).cumcount()
-        
-        # Mark as NaN if too stale
-        merged.loc[stale_count > MAX_STALE_SECONDS, col] = np.nan
-    
-    merged['mid_price'] = (merged['price_bid'] + merged['price_ask']) / 2
-    merged.dropna(inplace=True)
-    
-    if merged.empty:
-
-        raise ValueError("No valid mid-price data after processing. Check data quality.")
-    
-    return merged
 
 
 def calculate_effective_prices(row, threshold=1000):

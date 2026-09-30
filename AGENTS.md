@@ -20,7 +20,6 @@
 - Log with the existing `logging` setup; avoid ad-hoc prints in strategy code.
 
 ## Testing Guidelines
-- Minimal automated coverage exists; for quick checks run `python user_data/strategies/test_load_ave_config.py` to validate parameter file discovery.
 - When modifying parameter generation, run `python scripts/calculate_avellaneda_parameters.py ETH` and confirm the summary plus JSON output looks sane.
 - For end-to-end validation, start `docker-compose up` in dry-run mode and watch `user_data/logs/` for clean startup (no stack traces).
 
