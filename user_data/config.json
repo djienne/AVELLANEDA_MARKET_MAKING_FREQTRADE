@@ -94,12 +94,9 @@
         "Force_entry": true,
         "forcebuy_enable": true,
         "force_entry_enable": true,
-        "jwt_secret_key": "d1654caf3c530f6b037ae59a999d9d9328dec66bdd68799112cf1ba7d65276a3",
         "CORS_origins": [
             "http://127.0.0.1:8080"
-        ],
-        "username": "MM",
-        "password": "MM"
+        ]
     },
     "bot_name": "MM_adv",
     "initial_state": "running",

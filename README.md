@@ -55,6 +55,13 @@ ADVANCED_MM/
 
 The project uses Docker and Docker Compose for containerization and orchestration.
 
+* Create a `.env` file (gitignored) with the API-server credentials; `docker-compose` refuses to start the bot without it:
+  ```
+  FREQTRADE__API_SERVER__USERNAME=<user>
+  FREQTRADE__API_SERVER__PASSWORD=<non-numeric password>
+  FREQTRADE__API_SERVER__JWT_SECRET_KEY=<output of: python -c "import secrets;print(secrets.token_hex(32))">
+  ```
+  The previously committed secret is public in git history, so generate a new one. `show_PnL.py` reads the same two variables (e.g. `set -a; . ./.env; set +a; python show_PnL.py`).
 * Build the Docker images: `docker-compose build`
 * Start the trading bot and data collector: `docker-compose up`
 

@@ -21,6 +21,7 @@ services:
       - "./HL_data_collector:/freqtrade/HL_data_collector"
     ports:
       - "127.0.0.1:3004:8080"   # API for bot #1
+    env_file: .env   # FREQTRADE__API_SERVER__USERNAME / PASSWORD / JWT_SECRET_KEY (see README)
     environment:
       - HL_DATA_LOC=/freqtrade/HL_data_collector/HL_data/
     command: >
@@ -52,23 +53,3 @@ services:
         max-size: "10m"
         max-file: "3"
     command: ["python", "run_collector.py"]
-
-  # # === Bot 2: Market_Making_SHORT (new) ===
-  # freqtrade_mm_short:
-  #   image: freqtradeorg/freqtrade:2025.7
-  #   build:
-  #     context: .
-  #     dockerfile: "./Dockerfile.technical"
-  #   restart: unless-stopped
-  #   container_name: MM_ADV_short
-  #   volumes:
-  #     - "./user_data:/freqtrade/user_data"
-  #     - "./scripts:/freqtrade/scripts"
-  #   ports:
-  #     - "127.0.0.1:3005:8081"   # API for bot #2 (different host port and container)
-  #   command: >
-  #     trade
-  #     --logfile /freqtrade/user_data/logs/freqtrade_mm_short.log
-  #     --db-url sqlite:////freqtrade/user_data/tradesv3_mm_short.sqlite
-  #     --config /freqtrade/user_data/config_short.json
-  #     --strategy Market_Making_short

@@ -3,12 +3,13 @@
 Show performance for Freqtrade containers whose *container name* contains a configurable keyword.
 - Uses docker ps to get container names + host port -> 8080
 - If no host port is published, the container is listed with metrics as N/A
-- Auth: username 'ft', password 'kamala'
+- Auth: FREQTRADE__API_SERVER__USERNAME / __PASSWORD from the environment (same .env as the bot)
 - Binary good/bad colors + CAGR from profit_all% since first trade (open or closed)
 - NEW: DAYS column = days since first trade
 - Configurable keyword filter via CONTAINER_KEYWORD parameter
 """
 
+import os
 import re
 import subprocess
 from typing import Any, Dict, List, Optional, Iterable
@@ -17,8 +18,8 @@ from datetime import datetime, timezone
 import requests
 from requests.auth import HTTPBasicAuth
 
-USERNAME = "MM"
-PASSWORD = "MM"
+USERNAME = os.environ.get("FREQTRADE__API_SERVER__USERNAME", "")
+PASSWORD = os.environ.get("FREQTRADE__API_SERVER__PASSWORD", "")
 TIMEOUT = 3  # seconds
 CONTAINER_KEYWORD = "MM_"  # Filter containers containing this keyword
 
