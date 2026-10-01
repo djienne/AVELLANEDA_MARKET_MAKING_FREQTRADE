@@ -1,107 +1,36 @@
-# Hyperliquid Data Collector
+# Hyperliquid public-data collector
 
-Real-time tick data collector for Hyperliquid cryptocurrency exchange using websockets (order books, trades, bid/ask quotes) with automatic reconnection on connection drops.
-
-## Overview
-
-`hyperliquid_data_collector.py` connects to Hyperliquid's websocket API to collect and store:
-- **Price data** (best bid/offer)
-- **Trade executions**
-- **Order book snapshots** (configurable depth, default: 20 levels)
-
-The collector includes robust connection handling with automatic reconnection when websocket connections are dropped or interrupted.
-
-## Dependencies
-
-The project's dependencies are listed in `requirements.txt`.
-
-To install the core dependencies for running the data collector, you can use:
-```bash
-pip install hyperliquid-python-sdk websocket-client pyarrow pandas
-```
-
-The `requirements.txt` file also contains libraries for data analysis (`numpy`, `scipy`, etc.), which are used by the parameter calculation scripts.
-
-## Usage
-
-The recommended way to run the data collector is using the `run_collector.py` script, which allows for configuration via environment variables.
+This collector uses the project's shared Docker image and dependencies. Run it from the repository root:
 
 ```bash
-export SYMBOLS="BTC,ETH,SOL"
-export OUTPUT_DIR="HL_data"
-export ORDERBOOK_DEPTH=20
-
-python run_collector.py
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml up -d hl-collector
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml logs -f hl-collector
 ```
 
-### Configuration
+The default subscriptions are PAXG and ETH. The fast L2 stream supplies five levels; BBO, trades and asset contexts are separate subscriptions. The normal twenty-level stream was measured at roughly five-second updates, which is too slow for this experiment's two-second freshness bound.
 
-- `SYMBOLS`: Comma-separated list of symbols to collect data for (e.g., "BTC,ETH,PAXG"). Defaults to `"BTC,WLFI,PAXG"`.
-- `OUTPUT_DIR`: Directory to store the output files. Defaults to `"HL_data"`.
-- `ORDERBOOK_DEPTH`: The number of order book levels to store. Defaults to `20`.
+| Environment variable | Default |
+| :--- | :--- |
+| `SYMBOLS` | `PAXG,ETH` |
+| `OUTPUT_DIR` | `HL_data` outside Compose; `/freqtrade/market-data` in Compose |
+| `ORDERBOOK_DEPTH` | `5` |
 
-Alternatively, you can run the `hyperliquid_data_collector.py` script directly, but the configuration is hardcoded within the script's `main` function.
+`run_collector.py` is the Python entry point. Dependencies are pinned in the root project's `scripts/requirements.txt`.
 
-## Docker
+## Storage and health
 
-The project includes a `Dockerfile` to run the data collector in a container.
+Each stream has a `{kind}_{SYMBOL}.parquet/` directory. Kinds are `orderbooks`, `trades`, `prices`, `contexts` and `funding`.
 
-**Build the Docker image:**
-```bash
-docker build -t hyperliquid-collector .
-```
+- Exchange time and local receipt time are preserved.
+- Schemas use explicit nullable types, including temporarily absent depth levels.
+- A batch is published after five minutes or 10,000 rows. Only closed, atomically renamed parquet files are visible to readers.
+- Failed writes retain their pending records. Buffer overflow is fatal and reported, rather than silently discarding old observations.
+- Settled funding history is separate from the current funding prediction in asset contexts.
+- Timestamped market metadata records quantity precision, minimum size and public maker/taker fees.
+- `health.json` reports subscriptions, per-symbol book freshness, pending/published counts and errors.
+- Disconnects and stalled feeds trigger resubscription, with ten-second connection timeouts and two-to-thirty-second retry backoff. Old freshness is cleared on reconnect.
+- Graceful shutdown flushes buffered records. After an abrupt crash, published batches remain readable; the unpublished batch can be lost, and temporary files are ignored.
 
-**Run the Docker container:**
-```bash
-docker run -d --name hl-collector \
-  -e SYMBOLS="BTC,ETH,SOL,WLFI" \
-  -v ./HL_data:/app/HL_data \
-  hyperliquid-collector
-```
-This will start the collector in the background, save data to the local `HL_data` directory, and use the specified symbols.
+The calculator also validates event timestamps, coverage and trade identities. An empty trade window is only usable when its surrounding capture is valid. Public streams do not expose an authenticated order's queue position.
 
-## Data Storage
-
-Data is written to the output directory (default: `HL_data/`) in **Parquet** format. Each data type for each symbol is stored in its own directory containing partitioned parquet files.
-
-### File Structure
-```
-HL_data/
-├── prices_{SYMBOL}.parquet/     # Directory for Best bid/ask prices
-│   └── part_{timestamp}.parquet
-├── trades_{SYMBOL}.parquet/     # Directory for Trade executions
-│   └── part_{timestamp}.parquet
-└── orderbooks_{SYMBOL}.parquet/ # Directory for Order book snapshots
-    └── part_{timestamp}.parquet
-```
-
-### Data Schema
-
-**prices_{SYMBOL}.parquet**
-- `timestamp`: Collection timestamp (float)
-- `symbol`: Trading symbol (string)
-- `price`: Bid/ask price (float)
-- `size`: Volume at price level (float)
-- `side`: "bid" or "ask" (string)
-- `exchange_timestamp`: Hyperliquid timestamp (int, optional)
-
-**trades_{SYMBOL}.parquet**
-- `timestamp`: Collection timestamp (float)
-- `symbol`: Trading symbol (string)
-- `price`: Trade price (float)
-- `size`: Trade volume (float)
-- `side`: "buy" or "sell" (string)
-- `trade_id`: Unique trade identifier (string, optional)
-- `exchange_timestamp`: Hyperliquid timestamp (int, optional)
-
-**orderbooks_{SYMBOL}.parquet**
-- `timestamp`: Collection timestamp (float)
-- `symbol`: Trading symbol (string)
-- `sequence`: Order book sequence number (int, optional)
-- `exchange_timestamp`: Hyperliquid timestamp (int, optional)
-- `bid_price_{i}`, `bid_size_{i}`: Bid levels 0-19 (float)
-- `ask_price_{i}`, `ask_size_{i}`: Ask levels 0-19 (float)
-
-## Notes
-
-The collected data can be used for market analysis, strategy backtesting, and parameter optimization. Parameter calculation and strategy implementation are handled in separate modules.
+The paper stack writes to `runtime/paper/market-data/`. Existing collectors and historical datasets are separate and are not modified.

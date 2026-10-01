@@ -21,7 +21,7 @@ from requests.auth import HTTPBasicAuth
 USERNAME = os.environ.get("FREQTRADE__API_SERVER__USERNAME", "")
 PASSWORD = os.environ.get("FREQTRADE__API_SERVER__PASSWORD", "")
 TIMEOUT = 3  # seconds
-CONTAINER_KEYWORD = "MM_"  # Filter containers containing this keyword
+CONTAINER_KEYWORD = "avellaneda"  # Compose project names for this strategy
 
 PORT_RE = re.compile(r"(?:\d{1,3}(?:\.\d{1,3}){3}:)?(\d+)->8080/tcp")
 

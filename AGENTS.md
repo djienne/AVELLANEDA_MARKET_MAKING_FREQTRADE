@@ -9,7 +9,7 @@
 ## Build, Test, and Development Commands
 - `docker-compose build` builds the freqtrade bot image (with `Dockerfile.technical`) and the collector.
 - `docker-compose up` starts the bot (using `user_data/config.json` + `strategies/avellaneda.py`), the parameter service and the data collector with persistent host volumes; use `docker-compose down` to stop/clean containers.
-- `python scripts/calculate_avellaneda_parameters.py PAXG --minutes 15` recomputes Avellaneda parameters from `HL_data_collector/HL_data` and emits `scripts/avellaneda_parameters_PAXG.json`; override output with `AVELLANEDA_PARAMS_DIR`.
+- `python scripts/calculate_avellaneda_parameters.py PAXG` recomputes parameters from `HL_data_collector/HL_data` and emits `scripts/avellaneda_parameters_PAXG.json`; override input/output with `HL_DATA_LOC` / `AVELLANEDA_PARAMS_DIR`. The shared quote policy is in `scripts/quote_model.py`; `scripts/evaluate.py` runs chronological public-data replay.
 - `python HL_data_collector/run_collector.py` runs the collector outside Docker; configure with `SYMBOLS`, `OUTPUT_DIR`, and `ORDERBOOK_DEPTH` env vars.
 - `python test_env.py` quickly verifies key numeric dependencies; `python show_PnL.py` inspects stored trades.
 

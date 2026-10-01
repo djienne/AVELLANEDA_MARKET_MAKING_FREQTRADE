@@ -1,1029 +1,298 @@
-#!/usr/bin/env python3
-"""
-Hyperliquid Tick Data Collector (Fixed Version)
-Collects time-tagged prices, executed orders, and order book data via websockets
-
-Fixes applied:
-1. Stats counter bug - accepts count parameter
-2. Symbol KeyError risk - validates symbols before access
-3. Missing symbol field in output data - added to all records
-4. Thread safety for writer access - added writer_lock
-5. Race condition during reconnection - added reconnecting state
-6. Silent data drop on buffer overflow - logs warnings at 80% capacity
-7. File handle leak on writer creation failure - proper cleanup
-8. tell() unreliable for compressed file size - uses row count instead
-9. Inconsistent logging - all output uses logging module
-10. Daemon threads issue - non-daemon threads with proper join
-11. Periodic tasks sleep timing - checks running flag first
-12. Removed unused TickData base class
-"""
-
+"""Public Hyperliquid capture with typed, atomically published parquet batches."""
 import json
-import time
-from datetime import datetime
-from collections import defaultdict, deque
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Any
-import os
-import threading
-import random
 import logging
+import math
+import os
+from pathlib import Path
 import signal
 import sys
+import threading
+import time
+from collections import defaultdict, deque
+
+import ccxt
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import websocket
 
-from hyperliquid.info import Info
-from hyperliquid.utils import constants
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from utils import atomic_json
 
-
-# =============================================================================
-# Data Classes
-# =============================================================================
-
-@dataclass
-class PriceData:
-    """Price tick data"""
-    timestamp: float
-    symbol: str
-    price: float
-    size: float
-    exchange_timestamp: Optional[int] = None
-    side: Optional[str] = None  # 'bid' or 'ask' for BBO data
+log = logging.getLogger(__name__)
+KINDS = ("orderbooks", "trades", "prices", "contexts", "funding")
 
 
-@dataclass
-class TradeData:
-    """Trade execution data"""
-    timestamp: float
-    symbol: str
-    price: float
-    size: float
-    side: str  # 'buy' or 'sell'
-    exchange_timestamp: Optional[int] = None
-    trade_id: Optional[str] = None
+def schema(kind, depth):
+    fields = [("timestamp", pa.float64()), ("exchange_timestamp", pa.int64()), ("symbol", pa.string())]
+    if kind == "orderbooks":
+        fields += [(f"{side}_{name}_{i}", pa.float64())
+                   for i in range(depth) for side in ("bid", "ask") for name in ("price", "size")]
+    elif kind in ("prices", "trades"):
+        fields += [("price", pa.float64()), ("size", pa.float64()), ("side", pa.string())]
+        if kind == "trades":
+            fields += [("trade_id", pa.string())]
+    else:
+        fields += [("funding_rate", pa.float64()), ("mark_price", pa.float64())]
+    return pa.schema(fields)
 
-
-@dataclass
-class OrderBookLevel:
-    """Order book level data"""
-    price: float
-    size: float
-
-
-@dataclass
-class OrderBookData:
-    """Order book snapshot data"""
-    timestamp: float
-    symbol: str
-    bids: List[OrderBookLevel]
-    asks: List[OrderBookLevel]
-    exchange_timestamp: Optional[int] = None
-    sequence: Optional[int] = None
-
-
-# =============================================================================
-# Statistics Tracker
-# =============================================================================
-
-class DataStats:
-    """Track data collection statistics"""
-    
-    def __init__(self):
-        self.start_time = time.time()
-        self.counters = defaultdict(int)
-        self.last_update = time.time()
-        self.recent_data = defaultdict(lambda: deque(maxlen=100))
-        self.reconnection_count = 0
-        self.last_data_time = time.time()
-        self._lock = threading.Lock()  # FIX: Thread-safe counter updates
-    
-    def update(self, data_type: str, count: int = 1, data: Any = None):
-        """
-        Update statistics counters.
-        
-        FIX #1: Now accepts a count parameter to properly track batch updates.
-        
-        Args:
-            data_type: Type of data being tracked
-            count: Number of items to add to counter (default: 1)
-            data: Optional data sample for recent_data tracking
-        """
-        with self._lock:
-            self.counters[data_type] += count  # FIX: Use count parameter
-            self.last_update = time.time()
-            self.last_data_time = time.time()
-            if data:
-                self.recent_data[data_type].append(data)
-    
-    def record_reconnection(self):
-        with self._lock:
-            self.reconnection_count += 1
-    
-    def get_summary(self) -> Dict[str, Any]:
-        with self._lock:
-            runtime = time.time() - self.start_time
-            return {
-                'runtime_seconds': runtime,
-                'runtime_formatted': f"{runtime//3600:.0f}h {(runtime%3600)//60:.0f}m {runtime%60:.0f}s",
-                'counters': dict(self.counters),
-                'rates_per_minute': {k: v / (runtime / 60) for k, v in self.counters.items() if runtime > 0},
-                'last_update': datetime.fromtimestamp(self.last_update).strftime('%H:%M:%S'),
-                'reconnections': self.reconnection_count,
-                'seconds_since_last_data': time.time() - self.last_data_time
-            }
-
-
-# =============================================================================
-# Main Collector Class
-# =============================================================================
 
 class HyperliquidDataCollector:
-    """Main data collector class"""
-    
-    # Buffer capacity warning threshold (80%)
-    BUFFER_WARNING_THRESHOLD = 0.8
-    
-    def __init__(self, symbols: List[str], output_dir: str = "data", orderbook_depth: int = 20, rotation_interval: int = 300):
-        self.symbols = [s.upper() for s in symbols]  # FIX: Normalize to uppercase
-        self.output_dir = output_dir
-        self.orderbook_depth = orderbook_depth
-        # The open file has no parquet footer and is unreadable, so readers lag by up to this interval (5 min)
-        self.rotation_interval = rotation_interval
+    def __init__(self, symbols, output_dir="HL_data", orderbook_depth=20, rotation_interval=300):
+        self.symbols = [s.upper() for s in symbols]
+        if not self.symbols or not 1 <= orderbook_depth <= 20:
+            raise ValueError("At least one symbol and 1..20 book levels required")
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        previous_health = self.output_dir / "health.json"
+        if previous_health.exists() and json.loads(previous_health.read_text()).get("fatal"):
+            raise RuntimeError("Unresolved capture failure in health.json; inspect the data before restarting")
+        self.depth, self.rotation_interval = orderbook_depth, rotation_interval
+        self.buffers = {(s, k): deque() for s in self.symbols for k in KINDS}
+        self.schemas = {k: schema(k, self.depth) for k in KINDS}
+        self.last_publish = defaultdict(time.time)
+        self.last_received, self.acks = {}, set()
+        self.received, self.written = defaultdict(int), defaultdict(int)
+        self.lock = threading.Lock()
+        self.write_lock = threading.Lock()
+        self.stop_event = threading.Event()
+        self.running, self.connected, self.writer_healthy = False, False, True
+        self.connected_at = 0.
+        self.fatal, self.ws = None, None
+        self.metadata_time = 0.
+        self.metadata_attempt = 0.
+        self.metadata_error = None
+        self.last_funding = {}
+        self.exchange = None
+        self.rejected = 0
 
-        self.info = None
-        self.stats = DataStats()
-        self.subscription_ids = []
-        self.connection_healthy = False
-        self.is_reconnecting = False  # FIX #5: Track reconnection state
-        self.reconnection_delay = 1
-        self.max_reconnection_delay = 300
-        self.data_timeout = 60
-        
-        # Buffer configuration
-        self.price_buffer_size = 10000
-        self.trade_buffer_size = 10000
-        self.orderbook_buffer_size = 1000
-        
-        # Create separate buffers for each symbol
-        self.data_buffers = {}
-        for symbol in self.symbols:
-            self.data_buffers[symbol] = {
-                'prices': deque(maxlen=self.price_buffer_size),
-                'trades': deque(maxlen=self.trade_buffer_size),
-                'orderbooks': deque(maxlen=self.orderbook_buffer_size)
-            }
-        
-        self.running = False
-        
-        # FIX #10: Track threads for proper shutdown
-        self.flush_thread = None
-        self.summary_thread = None
-        self.reconnection_thread = None
-        
-        # Concurrency control
-        self.data_lock = threading.Lock()  # For data buffers
-        self.writer_lock = threading.Lock()  # FIX #4: Separate lock for writers
-        
-        # Parquet writing state - uses row count instead of file size
-        self.active_writers = {}  # (symbol, data_type) -> {'writer': ..., 'row_count': int, ...}
-        self.target_row_count = 100000  # FIX #8: Use row count instead of compressed file size
-        self.target_file_size = 10 * 1024 * 1024  # Keep for reference/logging
-        
-        # Setup logging - FIX #9: Configure properly
-        self._setup_logging()
-        
-        # Directory paths for each symbol
-        self.symbol_dirs = {}
-        
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Initialize Data Storage
-        self._init_data_storage()
-        
-        # Initialize connection
-        self._init_connection()
-    
-    def _setup_logging(self):
-        """Configure logging with consistent format"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.StreamHandler(sys.stdout)
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
-    
-    def _init_data_storage(self):
-        """Initialize directories for data storage - separate folders per symbol"""
-        for symbol in self.symbols:
-            self.symbol_dirs[symbol] = {}
-            
-            # Price data directory
-            price_dir = os.path.join(self.output_dir, f"prices_{symbol}.parquet")
-            self.symbol_dirs[symbol]['prices'] = price_dir
-            os.makedirs(price_dir, exist_ok=True)
-            
-            # Trade data directory
-            trade_dir = os.path.join(self.output_dir, f"trades_{symbol}.parquet")
-            self.symbol_dirs[symbol]['trades'] = trade_dir
-            os.makedirs(trade_dir, exist_ok=True)
-            
-            # Order book directory
-            orderbook_dir = os.path.join(self.output_dir, f"orderbooks_{symbol}.parquet")
-            self.symbol_dirs[symbol]['orderbooks'] = orderbook_dir
-            os.makedirs(orderbook_dir, exist_ok=True)
-    
-    def _init_connection(self):
-        """Initialize websocket connection"""
+    def _append(self, symbol, kind, row):
+        if symbol not in self.symbols:
+            return
+        key = (symbol, kind)
+        with self.lock:
+            if len(self.buffers[key]) >= 100_000:
+                self.fatal = f"Unpublished buffer overflow: {symbol}/{kind}"
+                raise BufferError(self.fatal)
+            self.buffers[key].append(row)
+            self.received[f"{symbol}/{kind}"] += 1
+            self.last_received[f"{symbol}/{kind}"] = time.time()
+
+    def _on_open(self, ws):
+        self.connected = True
+        self.connected_at = time.time()
+        self.acks.clear()
+        self.last_received.clear()  # freshness must come from this connection
+        for coin in self.symbols:
+            for stream in ("trades", "l2Book", "bbo", "activeAssetCtx"):
+                sub = {"type": stream, "coin": coin}
+                if stream == "l2Book":
+                    sub["fast"] = True  # measured ~0.55 s / five levels; default is ~5 s / twenty
+                ws.send(json.dumps({"method": "subscribe", "subscription": sub}))
+
+    def _check_connection(self):
+        now = time.time()
+        if not self.connected or now - self.connected_at < 30:
+            return
+        missing = any((coin, stream) not in self.acks for coin in self.symbols
+                      for stream in ("trades", "l2Book", "activeAssetCtx"))
+        stale = any(now - self.last_received.get(f"{coin}/{kind}", 0) > 30
+                    for coin in self.symbols for kind in ("orderbooks", "contexts"))
+        if missing or stale:
+            log.warning("Market stream stalled; reconnecting and resubscribing")
+            self.connected = False
+            self.ws.close()
+
+    def _on_message(self, ws, message):
         try:
-            self.info = Info(constants.MAINNET_API_URL, skip_ws=False)
-            self.connection_healthy = True
-            self.logger.info("Websocket connection initialized")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize connection: {e}")
-            self.connection_healthy = False
-    
-    def _is_connection_healthy(self) -> bool:
-        """Check if connection is healthy based on recent data"""
-        if not self.connection_healthy:
-            return False
-        
-        time_since_last_data = time.time() - self.stats.last_data_time
-        if time_since_last_data > self.data_timeout:
-            self.logger.warning(f"No data received for {time_since_last_data:.1f} seconds - connection may be dead")
-            return False
-        
+            packet = json.loads(message)
+            channel, data = packet.get("channel"), packet.get("data")
+            if channel == "subscriptionResponse":
+                sub = data["subscription"]
+                self.acks.add((sub["coin"], sub["type"]))
+                return
+            now = time.time()
+            if channel == "trades":
+                for trade in data:
+                    if trade["side"] not in ("A", "B") or trade.get("tid") is None:
+                        raise ValueError("Invalid trade side/id")
+                    price, size = float(trade["px"]), float(trade["sz"])
+                    if not (0 < price < float("inf") and 0 < size < float("inf")):
+                        raise ValueError("Invalid trade price/size")
+                    self._append(trade["coin"], "trades",
+                                 {"timestamp": now, "exchange_timestamp": int(trade["time"]),
+                                  "symbol": trade["coin"], "price": price, "size": size,
+                                  "side": "sell" if trade["side"] == "A" else "buy",
+                                  "trade_id": str(trade["tid"])})
+            elif channel == "l2Book":
+                row = {"timestamp": now, "exchange_timestamp": int(data["time"]), "symbol": data["coin"]}
+                for side, levels in zip(("bid", "ask"), data["levels"]):
+                    for i in range(self.depth):
+                        row[f"{side}_price_{i}"] = float(levels[i]["px"]) if i < len(levels) else None
+                        row[f"{side}_size_{i}"] = float(levels[i]["sz"]) if i < len(levels) else None
+                self._append(data["coin"], "orderbooks", row)
+            elif channel == "bbo":
+                for side, level in zip(("bid", "ask"), data["bbo"]):
+                    if level is not None:
+                        self._append(data["coin"], "prices",
+                                     {"timestamp": now, "exchange_timestamp": int(data["time"]),
+                                      "symbol": data["coin"], "price": float(level["px"]),
+                                      "size": float(level["sz"]), "side": side})
+            elif channel == "activeAssetCtx":
+                ctx = data["ctx"]
+                self._append(data["coin"], "contexts",
+                             {"timestamp": now, "exchange_timestamp": int(now * 1000), "symbol": data["coin"],
+                              "funding_rate": float(ctx["funding"]), "mark_price": float(ctx["markPx"])})
+        except Exception as exc:
+            self.rejected += 1
+            log.exception("Rejected market message: %s", exc)
+            # Invalid capture is visible to readers instead of being silently treated as no trading.
+            self.fatal = str(exc)
+            if ws is not None:
+                ws.close()
+
+    def _flush_buffers(self, force=False):
+        with self.write_lock:
+            for (symbol, kind), rows in self.buffers.items():
+                key = (symbol, kind)
+                with self.lock:
+                    if not rows or (not force and len(rows) < 10_000 and
+                                    time.time() - self.last_publish[key] < self.rotation_interval):
+                        continue
+                    batch = list(rows)
+                folder = self.output_dir / f"{kind}_{symbol}.parquet"
+                folder.mkdir(exist_ok=True)
+                path = folder / f"part_{time.time_ns()}.parquet"
+                tmp = path.with_suffix(".tmp")
+                try:
+                    table = pa.Table.from_pylist(batch, schema=self.schemas[kind])
+                    pq.write_table(table, tmp, compression="zstd")
+                    with tmp.open("rb") as handle:
+                        os.fsync(handle.fileno())
+                    os.replace(tmp, path)
+                    with self.lock:
+                        for _ in batch:
+                            rows.popleft()
+                        self.written[f"{symbol}/{kind}"] += len(batch)
+                    self.last_publish[key] = time.time()
+                except Exception:
+                    self.writer_healthy = False
+                    log.exception("Publication failed; %s/%s batch retained", symbol, kind)
+                    return False
+            self.writer_healthy = True
         return True
-    
-    def _validate_symbol(self, symbol: str) -> Optional[str]:
-        """
-        FIX #2: Validate and normalize symbol before use.
-        
-        Returns normalized symbol if valid, None if invalid.
-        """
-        if symbol is None:
-            return None
-        
-        normalized = symbol.upper()
-        
-        if normalized not in self.data_buffers:
-            self.logger.warning(f"Received data for unconfigured symbol: {symbol}")
-            return None
-        
-        return normalized
-    
-    def _check_buffer_capacity(self, symbol: str, buffer_type: str):
-        """
-        FIX #6: Log warning when buffer approaches capacity.
-        """
-        buffer = self.data_buffers[symbol][buffer_type]
-        capacity = buffer.maxlen
-        current_size = len(buffer)
-        
-        if current_size >= capacity * self.BUFFER_WARNING_THRESHOLD:
-            self.logger.warning(
-                f"Buffer near capacity for {symbol}/{buffer_type}: "
-                f"{current_size}/{capacity} ({current_size/capacity*100:.1f}%)"
-            )
-    
-    def _reconnect(self):
-        """Reconnect to websocket with exponential backoff"""
-        self.logger.info(f"Attempting reconnection (delay: {self.reconnection_delay}s)")
-        self.is_reconnecting = True  # FIX #5: Set reconnecting state
-        
-        # Wait before reconnecting
-        time.sleep(self.reconnection_delay)
-        
-        try:
-            # Cleanup old connection
-            if self.info:
-                try:
-                    self.info.disconnect_websocket()
-                except Exception:
-                    pass
-            
-            # Create new connection
-            self._init_connection()
-            
-            if self.connection_healthy:
-                # FIX #5: Clear subscriptions atomically before resubscribing
-                with self.data_lock:
-                    self.subscription_ids.clear()
-                
-                self._subscribe_to_feeds()
-                
-                # Reset reconnection delay on successful connection
-                self.reconnection_delay = 1
-                self.stats.record_reconnection()
-                self.is_reconnecting = False  # FIX #5: Clear reconnecting state
-                self.logger.info("Successfully reconnected and resubscribed to feeds")
-                return True
-            
-        except Exception as e:
-            self.logger.error(f"Reconnection failed: {e}")
-        
-        self.is_reconnecting = False
-        # Increase delay for next attempt (exponential backoff)
-        self.reconnection_delay = min(
-            self.reconnection_delay * 2 + random.uniform(0, 1),
-            self.max_reconnection_delay
-        )
-        return False
-    
-    def _subscribe_to_feeds(self):
-        """Subscribe to all data feeds"""
-        for symbol in self.symbols:
-            self.logger.info(f"Subscribing to data feeds for {symbol}...")
-            
-            # Subscribe to best bid/offer
-            bbo_id = self.info.subscribe(
-                {"type": "bbo", "coin": symbol},
-                self._handle_bbo_data
-            )
-            self.subscription_ids.append(bbo_id)
-            
-            # Subscribe to trades
-            trades_id = self.info.subscribe(
-                {"type": "trades", "coin": symbol},
-                self._handle_trade_data
-            )
-            self.subscription_ids.append(trades_id)
-            
-            # Subscribe to order book
-            l2book_id = self.info.subscribe(
-                {"type": "l2Book", "coin": symbol},
-                self._handle_orderbook_data
-            )
-            self.subscription_ids.append(l2book_id)
-        
-        self.logger.info(f"Subscribed to {len(self.subscription_ids)} data feeds")
-    
-    def _connection_monitor(self):
-        """Monitor connection health and reconnect if needed"""
-        while self.running:
-            # FIX #11: Check running flag before and after sleep
-            for _ in range(10):  # Check every second, total 10 seconds
-                if not self.running:
-                    return
-                time.sleep(1)
-            
+
+    def _metadata(self):
+        if self.exchange is None:
+            self.exchange = ccxt.hyperliquid({"enableRateLimit": True, "timeout": 10000})
+        markets = self.exchange.load_markets(reload=True)
+        now = time.time()
+        for coin in self.symbols:
             if not self.running:
-                break
-            
-            if not self._is_connection_healthy() and not self.is_reconnecting:
-                self.connection_healthy = False
-                self.logger.warning("Connection unhealthy - attempting reconnection")
-                
-                # Try to reconnect
-                while self.running and not self._reconnect():
-                    if not self.running:
-                        break
-    
-    def _get_or_create_writer(self, symbol: str, data_type: str, dir_path: str, schema: pa.Schema):
-        """
-        Get an existing ParquetWriter or create a new one if needed.
-        
-        FIX #7: Proper file handle cleanup on failure
-        FIX #8: Uses row count instead of file size for rotation
-        """
-        key = (symbol, data_type)
-        
-        # Check if we have an active writer
-        if key in self.active_writers:
-            writer_info = self.active_writers[key]
-            
-            # Check for rotation (row count OR time)
-            time_since_creation = time.time() - writer_info.get('creation_time', 0)
-            
-            # FIX #8: Check row count instead of compressed file size
-            if (writer_info['row_count'] >= self.target_row_count or 
-                time_since_creation >= self.rotation_interval):
-                
-                reason = "rows" if writer_info['row_count'] >= self.target_row_count else "time"
-                self.logger.info(f"Rotating file for {symbol}/{data_type} (reason: {reason}, rows: {writer_info['row_count']}, age: {time_since_creation:.1f}s)")
-                self._close_writer(symbol, data_type)
-            else:
-                return writer_info['writer']
-        
-        # Create new writer
-        filename = f"part_{int(time.time() * 1000)}.parquet"
-        file_path = os.path.join(dir_path, filename)
-        
-        file_handle = None
-        try:
-            # FIX #7: Track file_handle for cleanup on failure
-            file_handle = open(file_path, 'wb')
-            writer = pq.ParquetWriter(file_handle, schema, compression='zstd')
-            
-            self.active_writers[key] = {
-                'writer': writer,
-                'file_handle': file_handle,
-                'path': file_path,
-                'row_count': 0,  # FIX #8: Track row count
-                'creation_time': time.time()  # Track creation time for rotation
-            }
-            self.logger.info(f"Created new parquet file: {file_path}")
-            return writer
-            
-        except Exception as e:
-            # FIX #7: Clean up file handle on failure
-            self.logger.error(f"Failed to create parquet writer for {file_path}: {e}")
-            if file_handle is not None:
-                try:
-                    file_handle.close()
-                except Exception:
-                    pass
-                # Remove partial file
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-            return None
+                return
+            pair = f"{coin}/USDC:USDC"
+            market = markets[pair]
+            size_step = float(market["precision"]["amount"])
+            decimals = int(round(-math.log10(size_step)))
+            limits = market["limits"]
+            metadata = {"symbol": pair, "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
+                         "sz_decimals": decimals, "maker_fee": float(market["maker"]),
+                         "taker_fee": float(market["taker"]),
+                         "min_amount": float(limits["amount"].get("min") or size_step),
+                         "min_notional": float(limits["cost"].get("min") or 10),
+                         "fee_source": "ccxt_public", "ccxt": ccxt.__version__}
+            atomic_json(self.output_dir / f"market_{coin}.json", metadata)
+            atomic_json(self.output_dir / f"market_{coin}" / f"{int(now)}.json", metadata)
+            # Settled history is distinct from the predictive funding context stream.
+            history = self.exchange.fetch_funding_rate_history(pair, since=int((now - 86400) * 1000))
+            for item in sorted(history, key=lambda h: h["timestamp"]):
+                stamp = int(item["timestamp"])
+                if stamp > self.last_funding.get(coin, 0):
+                    self._append(coin, "funding", {"symbol": coin, "timestamp": now,
+                                 "exchange_timestamp": stamp, "funding_rate": float(item["fundingRate"]),
+                                 "mark_price": None})
+                    self.last_funding[coin] = stamp
+        self.metadata_time = now
 
-    def _close_writer(self, symbol: str, data_type: str):
-        """Close an active writer"""
-        key = (symbol, data_type)
-        if key not in self.active_writers:
-            return
-        
-        writer_info = self.active_writers[key]
-        try:
-            # Flush before closing
-            try:
-                f = writer_info['file_handle']
-                f.flush()
-                os.fsync(f.fileno())
-            except Exception as e:
-                self.logger.error(f"Error flushing before close for {key}: {e}")
+    def _health(self):
+        now = time.time()
+        symbols = {}
+        for coin in self.symbols:
+            acknowledgements = all((coin, s) in self.acks for s in ("trades", "l2Book", "activeAssetCtx"))
+            fresh_book = now - self.last_received.get(f"{coin}/orderbooks", 0) <= 10
+            recent_trades = now - self.last_received.get(f"{coin}/trades", 0) <= 600
+            fresh_context = now - self.last_received.get(f"{coin}/contexts", 0) <= 10
+            symbols[coin] = {"subscriptions_confirmed": acknowledgements,
+                             "book_fresh": fresh_book,
+                             "trades_recent": recent_trades, "context_fresh": fresh_context,
+                             "last_trade_at": self.last_received.get(f"{coin}/trades"),
+                             "healthy": bool(self.connected and acknowledgements and fresh_book and recent_trades and fresh_context and
+                                             self.writer_healthy and not self.fatal and not self.metadata_error)}
+        atomic_json(self.output_dir / "health.json",
+                    {"timestamp": pd.Timestamp.now(tz="UTC").isoformat(), "symbols": symbols,
+                     "received": dict(self.received), "written": dict(self.written),
+                     "pending": {f"{s}/{k}": len(v) for (s, k), v in self.buffers.items()},
+                     "writer_healthy": self.writer_healthy, "rejected": self.rejected, "fatal": self.fatal,
+                     "metadata_error": self.metadata_error})
 
-            # Close writer first (writes footer)
-            writer_info['writer'].close()
-            # Close file handle
-            writer_info['file_handle'].close()
-            
-            # Log final stats
-            self.logger.info(
-                f"Closed parquet file: {writer_info['path']} "
-                f"(rows: {writer_info['row_count']})"
-            )
-        except Exception as e:
-            self.logger.error(f"Error closing writer for {key}: {e}")
-            # Try to at least close the file handle
+    def _maintenance(self):
+        while self.running:
             try:
-                writer_info['file_handle'].close()
+                self._check_connection()
+                self._flush_buffers()
+                if time.time() - self.metadata_time >= 3600 and time.time() - self.metadata_attempt >= 60:
+                    self.metadata_attempt = time.time()
+                    try:
+                        self._metadata()
+                        self.metadata_error = None
+                    except Exception as exc:
+                        self.metadata_error = str(exc)
+                        log.exception("Metadata refresh failed; retrying in one minute")
+                self._health()
             except Exception:
-                pass
-        finally:
-            # Always delete the entry
-            del self.active_writers[key]
+                self.writer_healthy = False
+                log.exception("Collector maintenance failed")
+            if self.fatal:
+                self.stop_collection()
+            self.stop_event.wait(5)
 
-    def _write_buffered_data(self, symbol: str, data_type: str, data: List[Dict], dir_path: str):
-        """Write buffered data to Parquet file using a persistent writer"""
-        if not data:
-            return
-
-        try:
-            # Convert to DataFrame
-            if isinstance(data[0], dict):
-                df = pd.DataFrame(data)
-            else:
-                df = pd.DataFrame([asdict(item) for item in data])
-            
-            # Convert to Arrow Table
-            table = pa.Table.from_pandas(df)
-            row_count = len(df)
-            
-            # FIX #4: Use writer lock for thread safety
-            with self.writer_lock:
-                # Get or create writer
-                writer = self._get_or_create_writer(symbol, data_type, dir_path, table.schema)
-                
-                if writer:
-                    writer.write_table(table)
-                    
-                    # Update row count
-                    key = (symbol, data_type)
-                    if key in self.active_writers:
-                        self.active_writers[key]['row_count'] += row_count
-                        
-                        # Force flush to disk
-                        writer_info = self.active_writers[key]
-                        f = writer_info['file_handle']
-                        f.flush()
-                        os.fsync(f.fileno())
-
-        except Exception as e:
-            self.logger.error(f"Error writing to Parquet {dir_path}: {e}")
-    
-    def _handle_bbo_data(self, data: Dict[str, Any]):
-        """Handle best bid/offer data"""
-        # FIX #5: Ignore data during reconnection
-        if self.is_reconnecting:
-            return
-        
-        try:
-            timestamp = time.time()
-            
-            # Handle channel-based format
-            if 'channel' in data and data['channel'] == 'bbo' and 'data' in data:
-                bbo_data = data['data']
-                raw_symbol = bbo_data.get('coin')
-                
-                # FIX #2: Validate symbol
-                symbol = self._validate_symbol(raw_symbol)
-                if symbol is None:
-                    return
-                
-                # BBO format: bbo array with [bid, ask]
-                if 'bbo' in bbo_data and len(bbo_data['bbo']) >= 2:
-                    bid_info = bbo_data['bbo'][0]
-                    ask_info = bbo_data['bbo'][1]
-                    
-                    # FIX #3: Include symbol in output data
-                    bid_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(bid_info['px']),
-                        'size': float(bid_info['sz']),
-                        'side': 'bid',
-                        'exchange_timestamp': bbo_data.get('time')
-                    }
-                    
-                    ask_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(ask_info['px']),
-                        'size': float(ask_info['sz']),
-                        'side': 'ask',
-                        'exchange_timestamp': bbo_data.get('time')
-                    }
-                    
-                    with self.data_lock:
-                        self._check_buffer_capacity(symbol, 'prices')  # FIX #6
-                        self.data_buffers[symbol]['prices'].append(bid_data)
-                        self.data_buffers[symbol]['prices'].append(ask_data)
-                
-                self.stats.update('bbo_updates')
-                
-            else:
-                # Direct format fallback
-                raw_symbol = data.get('coin')
-                symbol = self._validate_symbol(raw_symbol)
-                if symbol is None:
-                    return
-                
-                if 'bid' in data and data['bid']:
-                    bid_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(data['bid']['px']),
-                        'size': float(data['bid']['sz']),
-                        'side': 'bid',
-                        'exchange_timestamp': data.get('time')
-                    }
-                    with self.data_lock:
-                        self._check_buffer_capacity(symbol, 'prices')
-                        self.data_buffers[symbol]['prices'].append(bid_data)
-                
-                if 'ask' in data and data['ask']:
-                    ask_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(data['ask']['px']),
-                        'size': float(data['ask']['sz']),
-                        'side': 'ask',
-                        'exchange_timestamp': data.get('time')
-                    }
-                    with self.data_lock:
-                        self._check_buffer_capacity(symbol, 'prices')
-                        self.data_buffers[symbol]['prices'].append(ask_data)
-                
-                self.stats.update('bbo_updates')
-                
-        except Exception as e:
-            self.logger.error(f"Error handling BBO data: {e}")  # FIX #9
-    
-    def _handle_trade_data(self, data: Dict[str, Any]):
-        """Handle trade data"""
-        if self.is_reconnecting:
-            return
-        
-        try:
-            timestamp = time.time()
-            
-            # Handle channel-based format
-            if 'channel' in data and data['channel'] == 'trades' and 'data' in data:
-                trades = data['data']
-                trades_processed = 0
-                
-                for trade in trades:
-                    raw_symbol = trade.get('coin')
-                    symbol = self._validate_symbol(raw_symbol)
-                    if symbol is None:
-                        continue
-                    
-                    # Convert A/B to buy/sell
-                    side = 'sell' if trade['side'] == 'A' else 'buy'
-                    
-                    # FIX #3: Include symbol in output
-                    trade_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(trade['px']),
-                        'size': float(trade['sz']),
-                        'side': side,
-                        'trade_id': str(trade.get('tid')),
-                        'exchange_timestamp': trade.get('time')
-                    }
-                    
-                    with self.data_lock:
-                        self._check_buffer_capacity(symbol, 'trades')
-                        self.data_buffers[symbol]['trades'].append(trade_data)
-                    
-                    trades_processed += 1
-                
-                # FIX #1: Pass actual count to stats
-                self.stats.update('trades', count=trades_processed)
-                
-            else:
-                # Direct format fallback
-                if isinstance(data, list):
-                    trades = data
-                else:
-                    trades = [data]
-                
-                trades_processed = 0
-                for trade in trades:
-                    raw_symbol = trade.get('coin')
-                    symbol = self._validate_symbol(raw_symbol)
-                    if symbol is None:
-                        continue
-                    
-                    side = 'sell' if trade['side'] == 'A' else 'buy'
-                    
-                    trade_data = {
-                        'timestamp': timestamp,
-                        'symbol': symbol,
-                        'price': float(trade['px']),
-                        'size': float(trade['sz']),
-                        'side': side,
-                        'trade_id': str(trade.get('tid')),
-                        'exchange_timestamp': trade.get('time')
-                    }
-                    
-                    with self.data_lock:
-                        self._check_buffer_capacity(symbol, 'trades')
-                        self.data_buffers[symbol]['trades'].append(trade_data)
-                    
-                    trades_processed += 1
-                
-                self.stats.update('trades', count=trades_processed)
-                
-        except Exception as e:
-            self.logger.error(f"Error handling trade data: {e}")
-    
-    def _handle_orderbook_data(self, data: Dict[str, Any]):
-        """Handle order book data"""
-        if self.is_reconnecting:
-            return
-        
-        try:
-            timestamp = time.time()
-            
-            # Handle channel-based format
-            if 'channel' in data and data['channel'] == 'l2Book' and 'data' in data:
-                book_data = data['data']
-                raw_symbol = book_data.get('coin')
-                symbol = self._validate_symbol(raw_symbol)
-                if symbol is None:
-                    return
-                
-                # Parse bids and asks
-                bids = []
-                asks = []
-                
-                if 'levels' in book_data and len(book_data['levels']) >= 2:
-                    bids_array = book_data['levels'][0]
-                    asks_array = book_data['levels'][1]
-                    
-                    for bid in bids_array:
-                        bids.append(OrderBookLevel(price=float(bid['px']), size=float(bid['sz'])))
-                    
-                    for ask in asks_array:
-                        asks.append(OrderBookLevel(price=float(ask['px']), size=float(ask['sz'])))
-                
-                # FIX #3: Include symbol in flattened output
-                csv_row = {
-                    'timestamp': timestamp,
-                    'symbol': symbol,
-                    'sequence': book_data.get('time'),
-                    'exchange_timestamp': book_data.get('time')
-                }
-                
-                for i in range(self.orderbook_depth):
-                    if i < len(bids):
-                        csv_row[f'bid_price_{i}'] = bids[i].price
-                        csv_row[f'bid_size_{i}'] = bids[i].size
-                    else:
-                        csv_row[f'bid_price_{i}'] = None
-                        csv_row[f'bid_size_{i}'] = None
-                    
-                    if i < len(asks):
-                        csv_row[f'ask_price_{i}'] = asks[i].price
-                        csv_row[f'ask_size_{i}'] = asks[i].size
-                    else:
-                        csv_row[f'ask_price_{i}'] = None
-                        csv_row[f'ask_size_{i}'] = None
-                
-                with self.data_lock:
-                    self._check_buffer_capacity(symbol, 'orderbooks')
-                    self.data_buffers[symbol]['orderbooks'].append(csv_row)
-                
-                self.stats.update('orderbook_updates')
-                
-            else:
-                # Direct format fallback
-                raw_symbol = data.get('coin')
-                symbol = self._validate_symbol(raw_symbol)
-                if symbol is None:
-                    return
-                
-                bids = []
-                asks = []
-                
-                if 'levels' in data and len(data['levels']) >= 2:
-                    bids_array = data['levels'][0]
-                    asks_array = data['levels'][1]
-                    
-                    for bid in bids_array:
-                        bids.append(OrderBookLevel(price=float(bid['px']), size=float(bid['sz'])))
-                    
-                    for ask in asks_array:
-                        asks.append(OrderBookLevel(price=float(ask['px']), size=float(ask['sz'])))
-                
-                csv_row = {
-                    'timestamp': timestamp,
-                    'symbol': symbol,
-                    'sequence': data.get('time'),
-                    'exchange_timestamp': data.get('time')
-                }
-                
-                for i in range(self.orderbook_depth):
-                    if i < len(bids):
-                        csv_row[f'bid_price_{i}'] = bids[i].price
-                        csv_row[f'bid_size_{i}'] = bids[i].size
-                    else:
-                        csv_row[f'bid_price_{i}'] = None
-                        csv_row[f'bid_size_{i}'] = None
-                    
-                    if i < len(asks):
-                        csv_row[f'ask_price_{i}'] = asks[i].price
-                        csv_row[f'ask_size_{i}'] = asks[i].size
-                    else:
-                        csv_row[f'ask_price_{i}'] = None
-                        csv_row[f'ask_size_{i}'] = None
-                
-                with self.data_lock:
-                    self._check_buffer_capacity(symbol, 'orderbooks')
-                    self.data_buffers[symbol]['orderbooks'].append(csv_row)
-                
-                self.stats.update('orderbook_updates')
-            
-        except Exception as e:
-            self.logger.error(f"Error handling order book data: {e}")
-    
-    def _flush_buffers(self):
-        """Flush data buffers to Parquet files - separate directories per symbol"""
-        try:
-            for symbol in self.symbols:
-                symbol_buffers = self.data_buffers[symbol]
-                symbol_dirs = self.symbol_dirs[symbol]
-                
-                # Use lock to safely move data out of buffers
-                with self.data_lock:
-                    prices_to_write = list(symbol_buffers['prices'])
-                    symbol_buffers['prices'].clear()
-                    
-                    trades_to_write = list(symbol_buffers['trades'])
-                    symbol_buffers['trades'].clear()
-                    
-                    orderbooks_to_write = list(symbol_buffers['orderbooks'])
-                    symbol_buffers['orderbooks'].clear()
-                
-                # Write outside the lock
-                if prices_to_write:
-                    self._write_buffered_data(symbol, 'prices', prices_to_write, symbol_dirs['prices'])
-                
-                if trades_to_write:
-                    self._write_buffered_data(symbol, 'trades', trades_to_write, symbol_dirs['trades'])
-                
-                if orderbooks_to_write:
-                    self._write_buffered_data(symbol, 'orderbooks', orderbooks_to_write, symbol_dirs['orderbooks'])
-                
-        except Exception as e:
-            self.logger.error(f"Error flushing buffers: {e}")
-    
-    def _print_summary(self):
-        """Print data collection summary"""
-        summary = self.stats.get_summary()
-        
-        lines = [
-            "",
-            "=" * 60,
-            f"DATA COLLECTION SUMMARY - {summary['last_update']}",
-            "=" * 60,
-            f"Runtime: {summary['runtime_formatted']}",
-            f"Connection: {'🟢 Healthy' if self.connection_healthy else '🔴 Reconnecting'}",
-        ]
-        
-        if summary['reconnections'] > 0:
-            lines.append(f"Reconnections: {summary['reconnections']}")
-        
-        lines.append(f"Time since last data: {summary['seconds_since_last_data']:.1f}s")
-        lines.append("Data collected:")
-        
-        for data_type, count in summary['counters'].items():
-            rate = summary['rates_per_minute'].get(data_type, 0)
-            lines.append(f"  {data_type}: {count:,} ({rate:.1f}/min)")
-        
-        lines.append("")
-        lines.append("Buffer sizes by symbol:")
-        
-        for symbol in self.symbols:
-            symbol_buffers = self.data_buffers[symbol]
-            total_buffered = sum(len(buffer) for buffer in symbol_buffers.values())
-            lines.append(
-                f"  {symbol}: {total_buffered} "
-                f"({len(symbol_buffers['prices'])} prices, "
-                f"{len(symbol_buffers['trades'])} trades, "
-                f"{len(symbol_buffers['orderbooks'])} orderbooks)"
-            )
-        
-        # Show active writer stats
-        with self.writer_lock:
-            lines.append(f"Active Parquet Writers: {len(self.active_writers)}")
-            for key, info in self.active_writers.items():
-                lines.append(f"  {key[0]}/{key[1]}: {info['row_count']} rows")
-        
-        lines.append("=" * 60)
-        
-        self.logger.info("\n".join(lines))
-    
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals from Docker (SIGTERM) and Ctrl+C (SIGINT)"""
-        signal_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        self.logger.info(f"{signal_name} received - initiating graceful shutdown...")
-        self.stop_collection()
-        sys.exit(0)
+    def stop_collection(self, *args):
+        self.running = False
+        self.stop_event.set()
+        if self.ws:
+            self.ws.close()
 
     def start_collection(self):
-        """Start data collection"""
-        self.logger.info(f"Starting Hyperliquid data collection for symbols: {self.symbols}")
-        self.logger.info(f"Output directory: {self.output_dir}")
-        self.logger.info(f"Target rows per file: {self.target_row_count:,}")
-
-        # Register signal handlers for graceful shutdown
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        self.logger.info("Signal handlers registered (SIGTERM, SIGINT)")
-
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+        signal.signal(signal.SIGTERM, self.stop_collection)
+        signal.signal(signal.SIGINT, self.stop_collection)
+        websocket.setdefaulttimeout(10)
+        self.stop_event.clear()
         self.running = True
-
+        retry_delay = 2
+        worker = threading.Thread(target=self._maintenance, daemon=False)
+        worker.start()
         try:
-            # Subscribe to data feeds
-            if self.connection_healthy:
-                self._subscribe_to_feeds()
-            else:
-                self.logger.error("Initial connection failed - will attempt reconnection")
-            
-            # FIX #10: Use non-daemon threads for proper shutdown
-            self.flush_thread = threading.Thread(target=self._periodic_flush, daemon=False)
-            self.flush_thread.start()
-            
-            self.summary_thread = threading.Thread(target=self._periodic_summary, daemon=False)
-            self.summary_thread.start()
-            
-            self.reconnection_thread = threading.Thread(target=self._connection_monitor, daemon=False)
-            self.reconnection_thread.start()
-            
-            self.logger.info("Data collection started. Press Ctrl+C or 'docker compose down' to stop.")
-            self.logger.info("Automatic reconnection enabled - connection drops will be handled automatically.")
-            
             while self.running:
-                time.sleep(1)
-
-        except KeyboardInterrupt:
-            self.logger.info("KeyboardInterrupt received...")
-            self.stop_collection()
-        except Exception as e:
-            self.logger.error(f"Error during data collection: {e}")
-            self.stop_collection()
-    
-    def _periodic_flush(self):
-        """Periodically flush buffers to disk"""
-        while self.running:
-            # FIX #11: Check running flag with shorter sleep intervals
-            for _ in range(5):  # 5 x 1 second = 5 seconds total
-                if not self.running:
-                    return
-                time.sleep(1)
-            
-            if self.running:
-                self._flush_buffers()
-    
-    def _periodic_summary(self):
-        """Periodically print collection summary"""
-        while self.running:
-            # FIX #11: Check running flag with shorter sleep intervals
-            for _ in range(30):  # 30 x 1 second = 30 seconds total
-                if not self.running:
-                    return
-                time.sleep(1)
-            
-            if self.running:
-                self._print_summary()
-    
-    def stop_collection(self):
-        """Stop data collection"""
-        self.logger.info("Stopping data collection...")
-        self.running = False
-
-        # FIX #10: Wait for threads to finish (with timeout)
-        threads = [
-            ('flush', self.flush_thread),
-            ('summary', self.summary_thread),
-            ('reconnection', self.reconnection_thread)
-        ]
-        
-        for name, thread in threads:
-            if thread is not None and thread.is_alive():
-                self.logger.info(f"Waiting for {name} thread to finish...")
-                thread.join(timeout=5)
-                if thread.is_alive():
-                    self.logger.warning(f"{name} thread did not finish in time")
-
-        # Unsubscribe from all feeds
-        for sub_id in self.subscription_ids:
-            try:
-                pass  # self.info.unsubscribe(...) if available
-            except Exception as e:
-                self.logger.error(f"Error unsubscribing {sub_id}: {e}")
-
-        # Use try/finally to ensure writers are closed even if flush fails
-        try:
-            self.logger.info("Performing final flush...")
-            self._flush_buffers()
-        except Exception as e:
-            self.logger.error(f"Error during final flush: {e}")
+                attempt = time.monotonic()
+                self.ws = websocket.WebSocketApp("wss://api.hyperliquid.xyz/ws",
+                    on_open=self._on_open, on_message=self._on_message,
+                    on_error=lambda ws, error: log.warning("WebSocket: %s", error))
+                self.ws.run_forever(ping_interval=20, ping_timeout=10)
+                self.connected = False
+                self.acks.clear()
+                if self.running:
+                    if time.monotonic() - attempt >= 60:
+                        retry_delay = 2
+                    log.warning("Reconnecting in %s seconds", retry_delay)
+                    self.stop_event.wait(retry_delay)
+                    retry_delay = min(30, retry_delay * 2)
         finally:
-            # ALWAYS close all writers
-            self.logger.info("Closing all parquet writers...")
-            with self.writer_lock:
-                for key in list(self.active_writers.keys()):
-                    self._close_writer(key[0], key[1])
-
-        # Disconnect websocket
-        try:
-            if self.info:
-                self.info.disconnect_websocket()
-        except Exception as e:
-            self.logger.error(f"Error disconnecting websocket: {e}")
-
-        # Final summary
-        self._print_summary()
-        self.logger.info(f"Data files saved in: {self.output_dir}")
-
-
-# =============================================================================
-# Main Entry Point
-# =============================================================================
-
-def main():
-    """Main function"""
-    # Configuration
-    SYMBOLS = ["BTC", "WLFI", "PAXG"]
-    OUTPUT_DIR = "HL_data"
-    ORDERBOOK_DEPTH = 20
-    
-    print("Hyperliquid Tick Data Collector (Fixed Version)")
-    print("=" * 50)
-    print(f"Symbols: {SYMBOLS}")
-    print(f"Order book depth: {ORDERBOOK_DEPTH} levels")
-    print(f"Output directory: {OUTPUT_DIR}")
-    print()
-    
-    collector = HyperliquidDataCollector(
-        SYMBOLS,
-        OUTPUT_DIR,
-        orderbook_depth=ORDERBOOK_DEPTH
-    )
-    
-    collector.start_collection()
-
-
-if __name__ == "__main__":
-    main()
+            self.running = False
+            self.stop_event.set()
+            worker.join(timeout=60)
+            self.connected = False
+            self._flush_buffers(force=True)
+            self._health()
+        if self.fatal:
+            raise RuntimeError(self.fatal)

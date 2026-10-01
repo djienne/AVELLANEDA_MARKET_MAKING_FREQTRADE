@@ -1,0 +1,28 @@
+services:
+  freqtrade_mm:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+    environment:
+      FREQTRADE__DRY_RUN: "true"
+      FREQTRADE__AVELLANEDA__PAPER_EVALUATION: "true"
+      FREQTRADE__BOT_NAME: "Avellaneda paper research"
+    volumes:
+      - ./runtime/paper/state:/freqtrade/state
+      - ./runtime/paper/params:/freqtrade/params:ro
+  hl-params:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+    volumes:
+      - ./runtime/paper/market-data:/freqtrade/market-data:ro
+      - ./runtime/paper/params:/freqtrade/params
+  hl-collector:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+    volumes:
+      - ./runtime/paper/market-data:/freqtrade/market-data

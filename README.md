@@ -1,143 +1,252 @@
-# Advanced Avellaneda-Stoikov Market Making with Freqtrade
+# Avellaneda–Stoikov Market Making
 
-A sophisticated market making system built on Freqtrade, implementing the Avellaneda-Stoikov optimal market making model with real-time parameter calculation for dynamic spread optimization. Runs on Hyperliquid. It is long-only and ping-pong for now.
+**An inventory-constrained research strategy for Hyperliquid perpetuals, running in Freqtrade.**
 
-## Important Note on Data Collection
+The bot alternates between flat and one long position. A public-data collector supplies order books, trades and funding observations; a separate process estimates the model inputs. The strategy and event replay share one quote implementation.
 
-Reliable sigma (volatility), k (order flow intensity), and gamma (risk aversion) parameters are crucial for this strategy. The included data in `HL_data_collector/HL_data` is only a small sample. You **must** collect your own data for at least a few days to obtain accurate parameter estimations.
+| Market | Execution | Stake | Leverage | Maximum hold | Trial drawdown stop |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `PAXG/USDC:USDC` | Paper only | Up to 50 USDC | 1× | 30 minutes | **10 USDC** |
 
-The system is designed to be self-sufficient:
-1. Run `docker-compose build` and `docker-compose up` to start data collection, parameter calculation and trading.
-2. The `hl-params` service recalculates the parameters every 15 minutes from the last 24 h of collected data. It needs at least 45 minutes of data before it writes a first parameter file.
-3. The bot opens new trades only while the parameter file is less than 1 hour old **and** the calculator measured a positive edge (see [Parameter Estimation](#parameter-estimation)). Otherwise it logs `New entries blocked` and only manages exits; dry-run behaves the same. Expect it to be blocked often: that is the honest answer when the data shows no edge.
+> [!IMPORTANT]
+> This is an experiment, not a validated profitable strategy. Public trade crossings do not reveal our live queue position. The strategy refuses live mode, preserves its risk-stop state across restarts, and blocks entries when data or model inputs are invalid.
 
-## Overview
+[Pipeline](#pipeline) · [Model](#model) · [Estimation](#estimation) · [Paper trial](#paper-trial) · [Validation](#validation) · [References](#references)
 
-This project implements an advanced market making strategy for Hyperliquid, dynamically calculating optimal bid-ask spreads using the Avellaneda-Stoikov model with real-time parameter estimation.
+## Pipeline
 
-**Current Configuration:** The included configuration is set to trade PAXG/USDC. Parameter files `avellaneda_parameters_{TICKER}.json` are generated at runtime (not committed). To switch trading pairs, change `exchange.pair_whitelist` in `user_data/config.json`; the strategy and the calculator pick up the first pair.
-
-**💰 Support this project**:
-- **Hyperliquid**: Sign up with [this referral link](https://app.hyperliquid.xyz/join/FREQTRADE) for 10% fee reduction
-
-## Project Structure
-
-```
-ADVANCED_MM/
-|-- user_data/
-|   |-- strategies/
-|   |   |-- avellaneda.py             # Main Avellaneda-Stoikov strategy
-|   |   `-- pair_loader.py            # Active pair from config.json
-|   |-- config.json                   # Freqtrade configuration
-|   `-- [other standard freqtrade dirs] # backtest_results/, data/, logs/, etc.
-|-- scripts/
-|   |-- calculate_avellaneda_parameters.py # Unified parameter calculation
-|   |-- backtest.py                   # Simulates the deployed bot to choose gamma
-|   |-- volatility.py                 # Volatility calculation (GARCH model)
-|   |-- intensity.py                  # Order flow intensity estimation (MLE)
-|   |-- utils.py                      # Data loading, effective mid-price, tick size
-|   |-- check_pipeline.py             # Runnable checks: python scripts/check_pipeline.py
-|   |-- Francesco_Mangia_Avellaneda_BTC.ipynb # Research notebook
-|   `-- requirements.txt              # Python dependencies
-|-- HL_data_collector/
-|   |-- hyperliquid_data_collector.py # Market data gathering
-|   |-- run_collector.py              # Data collector orchestrator
-|   |-- HL_data/                      # Folder containing collected market data
-|   |-- Dockerfile                    # Data collector docker container build
-|   `-- requirements.txt              # Python dependencies
-|-- docker-compose.yml                # Main container orchestration
-|-- Dockerfile.technical              # Extra python libraries for docker
-`-- show_PnL.py                       # Profit and loss analysis display tool
+```mermaid
+flowchart LR
+    HL["Hyperliquid<br/>public streams"] --> C["hl-collector"]
+    C --> D[("Complete parquet parts<br/>books, trades, funding")]
+    D --> P["hl-params<br/>causal estimation"]
+    P --> J[("Validated parameter JSON")]
+    J --> F["freqtrade_mm<br/>bounded paper policy"]
+    HL -->|"current executable book"| F
 ```
 
-## Building and Running
+| Component | Responsibility |
+| :--- | :--- |
+| `hl-collector` | Typed, atomic parquet publication; subscription health; market metadata and settled funding |
+| `hl-params` | Five-second volatility forecasts, size-aware crossing calibration and an explicit validity gate |
+| `freqtrade_mm` | Shared inventory policy, quantity/price checks, protective exits and persistent trial controls |
+| `scripts/evaluate.py` | Chronological replay, execution/cost sensitivities and uncertainty reporting |
 
-The project uses Docker and Docker Compose for containerization and orchestration.
+All three services use one project-owned image. The reference runtime is **Freqtrade 2025.10**, with **CCXT 4.5.84** pinned because the older connector cannot parse current Hyperliquid market metadata.
 
-* Create a `.env` file (gitignored) with the API-server credentials; `docker-compose` refuses to start the bot without it:
-  ```
-  FREQTRADE__API_SERVER__USERNAME=<user>
-  FREQTRADE__API_SERVER__PASSWORD=<non-numeric password>
-  FREQTRADE__API_SERVER__JWT_SECRET_KEY=<output of: python -c "import secrets;print(secrets.token_hex(32))">
-  ```
-  The previously committed secret is public in git history, so generate a new one. `show_PnL.py` reads the same two variables (e.g. `set -a; . ./.env; set +a; python show_PnL.py`).
-* Build the Docker images: `docker-compose build`
-* Start the trading bot and data collector: `docker-compose up`
+## Model
 
-The `docker-compose.yml` file defines three services:
+### Reference: the A–S approximation
 
-* `freqtrade_mm`: the trading bot (`avellaneda` strategy, `user_data/config.json`). It only reads the parameter file.
-* `hl-params`: runs `scripts/calculate_avellaneda_parameters.py` every 15 minutes, on the same image. Outside Docker, run the equivalent loop yourself:
-  `while true; do python scripts/calculate_avellaneda_parameters.py; sleep 900; done`
-* `hl-collector`: records Hyperliquid trades and order books to `HL_data_collector/HL_data` (files rotate every 5 minutes; set `SYMBOLS` to include your pair).
+For symmetric arrivals and unit lots, the classical approximate reservation price and half-spread are
 
-## Configuration
+$$
+\begin{aligned}
+r_t &= s_t-q_t\gamma\sigma_{\mathrm{abs}}^2(T-t),\\
+h_t &= \frac{\gamma\sigma_{\mathrm{abs}}^2(T-t)}{2}
+      +\frac{1}{\gamma}\ln\!\left(1+\frac{\gamma}{k}\right).
+\end{aligned}
+$$
 
-The main configuration for the Freqtrade bot is in the `user_data/config.json` file. Here are some of the key settings:
+Positive inventory lowers the reservation price. Setting inventory to zero while holding a long position removes that response. The implementation below uses an explicit constrained control problem rather than tuning an inventory-free spread.
 
-* "max_open_trades": 1 - The bot will only have one open trade at a time.
-* "stake_currency": "USDC" - The currency used for trading.
-* "stake_amount": 50 - The amount of stake currency to use for each trade.
-* "dry_run": true - The bot is running in simulation mode.
-* "fee": 0.0002 - Maker fee used for dry-run accounting. Same 2 bp as the simulation and the strategy (`MAKER_FEE` in `scripts/backtest.py`, passed to the bot through the parameter file).
-* "trading_mode": "futures" - The bot is trading futures contracts.
-* "exchange.name": "hyperliquid" - The exchange to trade on.
-* "exchange.pair_whitelist": ["PAXG/USDC:USDC"] - The trading pair to use.
+### Implemented objective
 
-## Switching Trading Pairs
+The policy maximizes expected terminal liquidation wealth, with an inventory-risk penalty:
 
-Change the pair once in `user_data/config.json` under `exchange.pair_whitelist` (first entry) and the rest will follow. The strategy reads that pair to pick the matching parameter file `avellaneda_parameters_{TICKER}.json`, and the parameter calculator defaults to the same ticker when no CLI ticker is provided.
+$$
+\max_{\pi}\;
+\mathbb{E}\!\left[
+X_T+q_TS_T-C_{\mathrm{liq}}(q_T)
+-\frac{\gamma_{\$}}{2}\int_t^T q_u^2v_u\,du
+\right].
+$$
 
-Parameter files live in `scripts/` by default (override with `AVELLANEDA_PARAMS_DIR`). After editing the pair, regenerate parameters with:
+| Symbol | Meaning | Units |
+| :--- | :--- | :--- |
+| $s_t,S_t$ | Top-of-book midpoint | USDC per base unit |
+| $X_t$ | Cash-flow ledger | USDC |
+| $q_t$ | Actual inventory, including partial fills | Base units |
+| $v_t$ | Forecast price-variance rate | Squared price units per second |
+| $C_{\mathrm{liq}}$ | Spread/depth cost and taker fee of selling the remaining position | USDC |
+| $\gamma_{\$}$ | Explicit risk preference | Inverse USDC |
+| $\delta$ | Quote distance from the reference mid | Price units |
+| $A,k$ | Crossing intensity scale and distance decay | Inverse seconds, inverse price units |
+
+The initial research coefficient is $\gamma_{\$}=2\;\mathrm{USDC}^{-1}$. It is a declared experiment setting, not a fitted market property. Cash, quantity and price units are kept consistent when the stake or asset denomination changes.
+
+A small backward dynamic program considers **wait, passive quote and liquidation** actions on a 15-second decision grid. It includes the 15-minute candle lock after a completed Freqtrade trade. The planning horizon is 30 minutes; an existing position's deadline also counts down from its first fill.
+
+The reference mid and arrival coefficients are frozen within each planning calculation. Forecast variance evolves through the horizon. A partial fill is managed using its actual remaining quantity. These are receding-horizon approximations, not a claim of exact optimality in a live queue.
+
+## Estimation
+
+### Volatility
+
+Prices are sampled every five seconds using only books received before each sample. A book older than two seconds cannot supply a fresh observation. Missing intervals remain missing; returns never bridge gaps.
+
+The primary estimator is a scaled Student-t GARCH(1,1). A fit is used only if optimization converges and its parameters and forecast variances are valid. Otherwise, a one-hour-half-life EWMA is used and identified explicitly in the output.
+
+The model consumes cumulative forecast variance:
+
+$$
+V_t(h)=s_t^2\sum_{j=1}^{h/\Delta t}
+\widehat{\operatorname{Var}}_t(r_{t+j}),
+\qquad \Delta t=5\ \mathrm{s}.
+$$
+
+Daily-equivalent sigma is a reporting quantity. The stored forecast covers one hour so that a still-valid estimate can support a subsequent 30-minute planning horizon. Diagnostics include convergence, persistence, residual autocorrelation and the estimator/fallback reason.
+
+### Size-aware crossing intensity
+
+For every complete 15-second window, calibration measures the deepest quote crossed by enough recorded volume to fill the intended quantity. Trade fragmentation therefore does not create extra independent observations.
+
+The fitted window-maximum distribution is
+
+$$
+P(D<d)=\exp\!\left[-A\Delta t\,e^{-kd}\right].
+$$
+
+An interval-censored likelihood counts each window once. Bid and ask fits are separate. Quotes are restricted to the empirically supported distance range; the outer boundary needs at least 20 supporting crossings. Uncertainty uses contiguous 30-minute blocks.
+
+This estimates a **full-quantity public crossing proxy**. It does not estimate an authenticated order's queue position.
+
+### Entry requirements
+
+The default calculation uses a trailing 24-hour window and requires:
+
+- At least six hours of data.
+- At least 95% usable book and quote-exposure coverage.
+- At least 1,000 exposure windows and 30 crossing windows per side.
+- Known market precision/fees, recent funding context and healthy collection.
+- Finite, correctly typed parameters and a valid UTC chronology.
+
+A failed calculation publishes a disabled result. The bot rechecks inputs at entry confirmation; a missing or invalid update cannot leave a cached entry permission active.
+
+Bad historical clocks are counted and excluded from usable observations and affected quote-exposure windows. They never become zero-crossing observations. The 95% coverage requirements still apply; an invalid latest book blocks entry.
+
+There is **one current parameter format**, with no schema version or compatibility layer. Files are named `avellaneda_parameters_{TICKER}.json`. Valid historical parameter snapshots and timestamped market metadata are retained for chronological research.
+
+`data_valid` describes input/model validity. `trade_enabled` additionally requires accepted historical evidence. The isolated trial explicitly enables `paper_evaluation`: simulated entries may be studied while profitability remains inconclusive, but data checks and risk stops cannot be bypassed.
+
+## Paper trial
+
+### Controls
+
+| Control | Behaviour |
+| :--- | :--- |
+| Position stop | Exit at a net liquidation loss of 1% of filled entry notional |
+| Holding deadline | Exit after 30 minutes from the first fill |
+| Drawdown stop | Cancel entries and flatten at 10 USDC below observed peak liquidation equity |
+| Trial duration | Seven days after valid data/model warm-up |
+| Restart | Restore the deadline, peak equity and stop latch; never reset accumulated losses |
+| Invalid data | Block entries and continue protective position management |
+
+These are trigger thresholds, not guaranteed execution bounds. Outages, gaps and execution delay can cause overshoot.
+
+Normal orders are GTC; the adapter does not guarantee post-only execution. Stop-loss/emergency orders use market execution. Deadline and drawdown exits use aggressive reduce-only limits at executable bid depth, then continue managing any residual.
+
+The shared policy defaults are defined in `scripts/quote_model.py`. Changing experiment settings requires reevaluation; the current 50-USDC stake and native stop also appear in the Freqtrade configuration.
+
+### Start
+
+Create a gitignored `.env` with fresh API-server credentials:
+
+```dotenv
+FREQTRADE__API_SERVER__USERNAME=<user>
+FREQTRADE__API_SERVER__PASSWORD=<non-numeric-password>
+FREQTRADE__API_SERVER__JWT_SECRET_KEY=<new-random-secret>
 ```
-python scripts/calculate_avellaneda_parameters.py
-# or override explicitly
-python scripts/calculate_avellaneda_parameters.py ETH
-```
-The data collector is assumed to include this pair (and potentially more); adjust its env vars only if you add a pair it doesn't already track.
 
-## Mathematical Foundation
+Then run from the repository root:
 
-### Avellaneda-Stoikov Market Making Model
-
-The strategy implements the classical Avellaneda-Stoikov optimal market making model from "High-frequency trading in a limit order book" (2008).
-
-**Core Model Elements:**
-
-The bot quotes each side at a distance from the mid-price `s`:
-
-```
-half_spread = 0.5 * gamma * (sigma * s)**2 * T + (1 / gamma) * ln(1 + gamma / k) + fee * s
-buy_price   = s - half_spread(k_bid)
-sell_price  = s + half_spread(k_ask)
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml config --quiet
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml build freqtrade_mm
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml up -d
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml logs -f
 ```
 
-Where:
-- `s`: effective mid-price (price levels where $1000 of depth is reached on each side)
-- `sigma`: daily volatility of log returns; `sigma * s` converts it to $
-- `k`: decay of the fill intensity with distance from mid, `lambda(delta) = A * exp(-k * delta)`, in 1/$
-- `gamma`: risk aversion, in 1/$
-- `T`: time horizon in days, fixed to the 15-minute analysis window. Only `gamma * T` enters the first term, so `gamma` alone is tuned.
-- The reservation price equals `s`: the inventory term `q * gamma * (sigma * s)**2 * T` is off (q = 0), because the bot is long-only with one position at a time (buy at the bid, then sell at the ask).
+The API is bound to **127.0.0.1:3004**. Runtime files are isolated under `runtime/paper/`:
 
-### Parameter Estimation
+```text
+runtime/paper/
+├── market-data/       # Public capture, metadata and collector health
+├── params/            # Current results and valid historical snapshots
+└── state/             # Paper database, trial.json and Freqtrade logs
+```
 
-The `hl-params` service recalculates everything every 15 minutes from the last 24 h of data (50 chunks of 15 minutes). It refuses to run if the newest order book data is more than 10 minutes old (collector down); `--max-data-age` overrides this for offline analysis.
+`trial.json` reports the current state and blocking reason. `waiting_for_valid_data` is expected during warm-up. An elapsed six hours alone does not authorize an entry: coverage, crossing counts, model validity and the chosen action must also qualify.
 
-- **sigma:** GARCH(1,1) on 1-second log returns; a rolling standard deviation is used where GARCH fails or disagrees by more than 2x.
-- **k, A:** Poisson maximum likelihood on how far taker trades walked from the mid-price. Each trade is compared with the book snapshot strictly before it, on the exchange clock.
-- **gamma:** chosen by simulating the deployed bot on the recorded trades. The simulation holds one unit, long-only, alternating bid and ask, re-quoted every 15 s (`process_throttle_secs`) with the formula above. It uses the fee and the sigma and k from earlier periods only. An order fills when a taker trades strictly through it.
-- **Edge and `trade_enabled`:** edge is the simulated PnL minus `mean(position) * price change`, which removes what a long-only bot earns or loses from the trend alone. `trade_enabled` is true only if the chosen gamma has a positive edge over the full window **and** the gamma chosen on the first 2/3 of the window keeps a positive edge on the last 1/3. The per-gamma fills and edges are saved in the parameter file under `backtest`.
+The collector uses Hyperliquid's **fast five-level book stream**. A local probe measured approximately 0.55 seconds between fast snapshots versus 5.22 seconds for the default twenty-level stream. These measurements describe that probe, not a latency guarantee.
 
-**Limits to keep in mind**
-- Freqtrade's dry run fills a limit order only when the top of the book crosses it at a loop instant. The simulation fills on any trade through the price, which is how the live exchange behaves. So dry-run PnL cannot validate the simulation.
-- A few hours of data give few fills; `trade_enabled` is a noisy, deliberately conservative decision.
-- When quotes sit far beyond the fitted distance range (49 ticks), k is extrapolated; the calculator prints a warning.
+The paper Compose override is separate from the default `runtime/main/` paths. Existing historical databases are not reused or reset. CPU and API-rate limits on a shared host remain managed by the workspace's central tooling.
+
+### Connection loss and PC restarts
+
+The collector reconnects and resubscribes after disconnects or stalled feeds. Connections use a ten-second socket timeout; retries back off from two to thirty seconds. Fresh observations and subscription acknowledgements are required after each reconnection. Failed parameter calculations retry after one minute; valid estimates retain the fifteen-minute schedule.
+
+Docker's `unless-stopped` policy restores the services when its engine restarts. On Windows, enable [Start Docker Desktop when you sign in](https://docs.docker.com/desktop/settings-and-maintenance/settings/); recovery then occurs after Windows sign-in, not before it. Containers deliberately stopped with `docker compose stop` remain stopped until started again.
+
+SQLite trades/orders, first-fill deadlines, trial start, peak equity and stop latches survive in `runtime/paper/state/`. Restarting does not grant a new risk budget or holding period. Graceful shutdown flushes capture buffers; an abrupt crash can lose the unpublished batch (normally up to five minutes). Incomplete temporary files are ignored, and missing intervals remain gaps subject to the coverage checks.
+
+## Validation
+
+Run the focused checks in the same image:
+
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
+  run --rm --no-deps --entrypoint python hl-params /freqtrade/scripts/check_pipeline.py
+```
+
+Checks include synthetic parameter recovery, future-data invariance, failed GARCH fits, an independently enumerated small control problem, denomination scaling, Freqtrade's candle lock, partial fills, cancellation races, terminal losses, rejected parameter updates, persistent stops, SQLite order/deadline restoration, reconnects and parquet failure recovery.
+
+For a single calculation:
+
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
+  run --rm --no-deps --entrypoint python hl-params \
+  /freqtrade/scripts/calculate_avellaneda_parameters.py PAXG
+```
+
+For a chronological replay, replace the example dates with an interval having a preceding calibration history:
+
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
+  run --rm --no-deps --entrypoint python hl-params \
+  /freqtrade/scripts/evaluate.py PAXG --data-dir /freqtrade/market-data \
+  --start 2026-10-03T00:00:00Z --end 2026-10-10T00:00:00Z \
+  --output /freqtrade/params/evaluation
+```
+
+The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. It saves JSON ledgers, an evidence summary and a diagnostic figure.
+
+The normal evidence gate requires seven complete out-of-sample days, 100 completed round trips and positive one-sided 95% block-bootstrap lower bounds for base and five-second latency scenarios. Two-day-block sensitivity must also remain positive. Missing observations or insufficient samples remain **inconclusive**.
+
+### Remaining scientific limits
+
+- Public-trade replay and Freqtrade dry-run have different fill mechanisms. Neither validates live queue position.
+- The binary full-fill arrival model approximates a market with partial execution; the ledger still accounts for actual simulated partial quantities.
+- A finite, fixed reference price within the control calculation omits predictive drift and explicit adverse-selection dynamics. Post-fill markouts are recorded to test that assumption.
+- Funding marks use the observed mark when available, otherwise the contemporaneous book midpoint as a valuation proxy.
+- Quote search is capped at 512 tick candidates for unusually wide fitted ranges.
+- Synthetic agreement, a healthy process or a short positive run does not establish a trading edge.
+
+## References
+
+| Resource | Relevant material |
+| :--- | :--- |
+| [Avellaneda & Stoikov (2008)](https://math.nyu.edu/inmemoriam/avellaneda/HighFrequencyTrading.pdf) | Reservation prices and approximate spreads |
+| [Guéant, Lehalle & Fernandez-Tapia](https://arxiv.org/abs/1105.3115) | Inventory constraints and finite-horizon control |
+| Cartea, Jaimungal & Penalva, *Algorithmic and High-Frequency Trading*, Chapter 10 | Running inventory penalties, liquidation and adverse selection |
+| López de Prado, *Advances in Financial Machine Learning*, Chapters 7, 11 and 12 | Leakage, selection bias and chronological evaluation |
+| Jansen, *Machine Learning for Algorithmic Trading*, Chapter 9 | Volatility modelling and residual/forecast diagnostics |
+| [Hyperliquid fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) and [funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding) | Cost assumptions |
+
+## Support
+
+[Hyperliquid referral link](https://app.hyperliquid.xyz/join/FREQTRADE) — supports the project; current eligibility and discounts follow Hyperliquid's terms.
 
 ## Disclaimer
 
-This software is for educational and research purposes only. Market making involves significant financial risk. Always test thoroughly in Dry-Run (paper trading) mode before deploying with real capital. Past performance does not guarantee future results.
-
-## License
-
-This project implements academic market making models and is intended for research and educational use.
+This project is for research and education. Market making can lose money through price moves, adverse selection, costs and execution failures. Historical and synthetic results do not establish future profitability.

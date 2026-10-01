@@ -2,16 +2,16 @@ import os
 from hyperliquid_data_collector import HyperliquidDataCollector
 
 def _symbols():
-    raw = os.getenv("SYMBOLS", "BTC,WLFI,PAXG")
+    raw = os.getenv("SYMBOLS", "PAXG,ETH")
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 def main():
     symbols = _symbols()
     output_dir = os.getenv("OUTPUT_DIR", "HL_data")
     try:
-        orderbook_depth = int(os.getenv("ORDERBOOK_DEPTH", "20"))
+        orderbook_depth = int(os.getenv("ORDERBOOK_DEPTH", "5"))
     except ValueError:
-        orderbook_depth = 20
+        orderbook_depth = 5
 
     print("Hyperliquid Tick Data Collector (Docker)")
     print("========================================")

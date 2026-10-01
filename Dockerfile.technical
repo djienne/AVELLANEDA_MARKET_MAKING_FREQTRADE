@@ -1,3 +1,6 @@
-FROM freqtradeorg/freqtrade:2025.7
+FROM freqtradeorg/freqtrade:2025.10
 
-RUN pip3 install ta tqdm scipy plotly matplotlib arch pyarrow
+COPY scripts/requirements.txt /tmp/avellaneda-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/avellaneda-requirements.txt
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/freqtrade/scripts \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_MAX_THREADS=1

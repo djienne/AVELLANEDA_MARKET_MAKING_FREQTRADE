@@ -32,6 +32,8 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+runtime/
+*.bak
 
 # Generated at runtime
 user_data/strategies/log_ave_mm.txt
