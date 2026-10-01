@@ -31,4 +31,6 @@ Inspect the result and blocking reasons. Insufficient data is inconclusive; test
 - Reuse the shared loaders and quote policy. Keep units, assumptions and validity limits close to the model; avoid duplicate implementations and parameter-format compatibility code.
 - Use `Path` for files and the existing logger for strategy diagnostics. Add a focused runnable check for non-trivial logic.
 - Keep commits focused, with short imperative messages and relevant validation evidence. Never commit credentials, generated market data, parameter snapshots, databases or logs.
+- GitHub access: the `djienne` SSH key is `~/.ssh/id_rsa_reflechir` (its public key matches GitHub), selected by the `github.com` SSH host configuration. Use `git@github.com:djienne/AVELLANEDA_MARKET_MAKING_FREQTRADE.git` for pushes instead of relying on the active HTTPS login. Never read or publish private-key contents.
+- Refer only to the `djienne` GitHub identity in documentation and status messages; do not name other GitHub accounts.
 - CPU and API-rate limits are managed by the parent workspace's central tools; do not hand-edit them or touch other bots.
