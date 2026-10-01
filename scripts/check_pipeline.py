@@ -14,10 +14,10 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "scripts"), str(ROOT / "user_data/strategies"), str(ROOT / "HL_data_collector")]
-from backtest import replay, visible_queue
+from backtest import prepare_replay_events, replay, visible_queue
 from hyperliquid_data_collector import HyperliquidDataCollector
 from intensity import fit_maxima, window_depths
-from quote_model import next_unlock, quote_decision, update_trial, validate_params
+from quote_model import _solve_quotes, next_unlock, quote_decision, update_trial, validate_params, warm_quote_kernel
 from utils import atomic_json, load_funding_data, load_trades_data
 from volatility import forecast_variance
 
@@ -188,6 +188,50 @@ class Checks(unittest.TestCase):
             return max(wait, buy - risk * (1 - occupied))
         actual = quote_decision(p, b, now, planning_seconds=45)
         self.assertAlmostEqual(actual["value"], value(3, False), places=9)
+
+    def test_compiled_quote_parity_at_boundaries(self):
+        warm_quote_kernel()
+        for stamp in ("12:14:59.5", "12:15:00", "12:59:59.5"):
+            now = pd.Timestamp(f"2026-10-01T{stamp}Z")
+            for quantity in (0., .05, .5):
+                for gamma, remaining in ((.1, 0.), (2., 15.), (10., 1800.)):
+                    p, b = parameters(now), live_book(now)
+                    p.update(gamma_usdc=gamma, funding_rate=-.0001 if quantity else .0001)
+                    if gamma == 10:  # Supported distance lies inside the spread: empty quote grids.
+                        for model in p["intensity"].values():
+                            model.update(min_delta=.001, max_delta=.002)
+                    actual = quote_decision(p, b, now, quantity, remaining)
+                    with patch("quote_model._solve_quotes", _solve_quotes.py_func):
+                        expected = quote_decision(p, b, now, quantity, remaining)
+                    self.assertAlmostEqual(actual.pop("value"), expected.pop("value"), places=11)
+                    self.assertEqual(actual, expected)
+        # No risk, spread revenue or liquidation cost: ties prefer waiting while flat,
+        # and liquidation while held. Warm-up and both inventory states use one signature.
+        empty, zero = np.zeros(0), np.zeros(1)
+        for count in (1, 2):
+            args = (empty, np.zeros((count, 0)), empty, empty, empty, empty, zero,
+                    np.ones(count), np.zeros(count), 2., 100., 0., 0., 1, 15, 900)
+            self.assertEqual(_solve_quotes(*args), (0, 0.))
+            self.assertEqual(_solve_quotes(*args), _solve_quotes.py_func(*args))
+        self.assertEqual(len(_solve_quotes.signatures), 1)
+
+    def test_prepared_replay_is_reusable_and_preserves_depth(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        end = start + pd.Timedelta(seconds=60)
+        book = recorded(start, 60)
+        book["bid_price_1"], book["bid_size_1"] = 99.98, 1.
+        book.loc[book.index[::2], ["bid_price_1", "bid_size_1"]] = np.nan
+        trades = pd.DataFrame({"side": ["sell"], "price": [99.8], "size": [.2]},
+                              index=[start + pd.Timedelta(seconds=3)])
+        p = [parameters(start)]
+        prepared = prepare_replay_events(book, trades, p, start, end)
+        saved = copy.deepcopy(prepared)
+        expected = replay(book, trades, p, start, end)
+        for _ in range(2):
+            self.assertEqual(replay(book, trades, p, start, end, prepared_events=prepared), expected)
+            self.assertEqual(prepared, saved)
+        with self.assertRaises(ValueError):
+            replay(book, trades, p, start, end + pd.Timedelta(seconds=1), prepared_events=prepared)
 
     def test_order_remains_exposed_until_cancel_ack(self):
         start = pd.Timestamp("2026-10-01T12:01:00Z")

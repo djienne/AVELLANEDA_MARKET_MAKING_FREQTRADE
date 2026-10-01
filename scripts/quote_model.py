@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 import pandas as pd
+from numba import njit
 
 from utils import get_tick_size, round_price, utc
 
@@ -136,6 +137,58 @@ def _arrival(prices, mid, model):
     return probability, occupied
 
 
+@njit(cache=True, fastmath=False)
+def _solve_quotes(bid_proceeds, ask_proceeds, pb, ob, pa, oa, variance, quantities, costs,
+                  gamma, mid, funding_rate, base, remaining_steps, step, lock_seconds):
+    """Numeric Bellman recursion; strict comparisons retain first-candidate tie priority."""
+    n = len(variance)
+    flat = np.zeros(n + 1)
+    held = np.zeros((len(quantities), n + 1))
+    held[:, -1] = -costs
+    chosen, value = 0, 0.
+    for i in range(n - 1, -1, -1):
+        unlock_now = (math.floor((base + i * step) / lock_seconds) + 1) * lock_seconds
+        unlock_fill = (math.floor((base + (i + 1) * step) / lock_seconds) + 1) * lock_seconds
+        unlock_now = min(n, max(i + 1, int(math.ceil((unlock_now - base) / step))))
+        unlock_fill = min(n, max(i + 1, int(math.ceil((unlock_fill - base) / step))))
+        funding_due = math.floor((base + (i + 1) * step) / 3600) > math.floor((base + i * step) / 3600)
+        for j in range(len(quantities)):
+            q = quantities[j]
+            risk = .5 * gamma * q ** 2 * variance[i]
+            funding = q * mid * funding_rate if funding_due else 0.
+            best, pick = -costs[j] + flat[unlock_now], 0
+            if not (len(quantities) > 1 and j == len(quantities) - 1 and i >= remaining_steps):
+                wait = held[j, i + 1] - risk - funding
+                if wait > best:
+                    best, pick = wait, 1
+                for k in range(len(pa)):
+                    score = (pa[k] * (ask_proceeds[j, k] + flat[unlock_fill])
+                             + (1 - pa[k]) * held[j, i + 1] - risk * oa[k] - funding * (1 - pa[k]))
+                    if score > best:
+                        best, pick = score, k + 2
+            held[j, i] = best
+            if i == 0 and len(quantities) > 1 and j == len(quantities) - 1:
+                chosen, value = pick, best
+        best, pick = flat[i + 1], 0
+        for k in range(len(pb)):
+            score = (pb[k] * (bid_proceeds[k] + held[0, i + 1]) + (1 - pb[k]) * flat[i + 1]
+                     - .5 * gamma * quantities[0] ** 2 * variance[i] * (1 - ob[k])
+                     - (quantities[0] * mid * funding_rate * pb[k] if funding_due else 0.))
+            if score > best:
+                best, pick = score, k + 1
+        flat[i] = best
+        if i == 0 and len(quantities) == 1:
+            chosen, value = pick, best
+    return chosen, value
+
+
+def warm_quote_kernel():
+    """Compile/load the single numeric signature before the bot starts managing orders."""
+    one = np.ones(1)
+    _solve_quotes(one, one.reshape(1, 1), one, one, one, one, one, one, one,
+                  2., 100., 0., 0., 1, STEP, 900)
+
+
 def quote_decision(p, book, now, quantity=0., remaining_seconds=HORIZON, stake=STAKE, planning_seconds=HORIZON):
     """Backward dynamic programming; actual partial quantity gets its own liquidation state.
 
@@ -162,54 +215,29 @@ def quote_decision(p, book, now, quantity=0., remaining_seconds=HORIZON, stake=S
         raise ValueError("Planning horizon exceeds published variance forecast")
     cumulative = np.interp(at, x, curve)
     variance = np.diff(cumulative) * mid ** 2
-    n = len(variance)
-    flat = np.zeros(n + 1)
-    quantities = [target] + ([quantity] if quantity > 0 else [])
-    held = np.zeros((len(quantities), n + 1))
+    if not len(variance):
+        return None
+    quantities = np.asarray([target] + ([quantity] if quantity > 0 else []), dtype=float)
     costs, limits = [], []
     for j, q in enumerate(quantities):
         proceeds, limit = liquidation(book, q, ft)
         costs.append(q * mid - proceeds)
         limits.append(limit)
-        held[j, -1] = -costs[j]
-    chosen = None
     base = utc(now).timestamp()
     remaining_steps = max(0, int(math.ceil(remaining_seconds / STEP)))
     funding_rate = float(p.get("funding_rate", 0))
-    for i in range(n - 1, -1, -1):
-        unlock_now = min(n, max(i + 1, int(math.ceil((next_unlock(base + i * STEP) - base) / STEP))))
-        unlock_fill = min(n, max(i + 1, int(math.ceil((next_unlock(base + (i + 1) * STEP) - base) / STEP))))
-        funding_due = math.floor((base + (i + 1) * STEP) / 3600) > math.floor((base + i * STEP) / 3600)
-        for j, q in enumerate(quantities):
-            risk = .5 * p["gamma_usdc"] * q ** 2 * variance[i]
-            funding = q * mid * funding_rate if funding_due else 0.
-            candidates = [-costs[j] + flat[unlock_now], held[j, i + 1] - risk - funding]
-            if len(ask):
-                proceeds = q * (ask - mid) - fm * q * ask
-                candidates.extend(pa * (proceeds + flat[unlock_fill]) + (1 - pa) * held[j, i + 1]
-                                  - risk * oa - funding * (1 - pa))
-            if quantity > 0 and j == len(quantities) - 1 and i >= remaining_steps:
-                pick = 0
-            else:
-                pick = int(np.argmax(candidates))  # ties prefer liquidation, then waiting
-            held[j, i] = candidates[pick]
-            if i == 0 and quantity > 0 and j == len(quantities) - 1:
-                chosen = {"action": "liquidate" if pick == 0 else ("wait" if pick == 1 else "sell"),
-                          "price": limits[j] if pick == 0 else (None if pick == 1 else float(ask[pick - 2])),
-                          "quantity": quantity, "value": float(candidates[pick]), "reason": "model"}
-        scores = [flat[i + 1]]
-        if len(bid):
-            proceeds = target * (mid - bid) - fm * target * bid
-            scores.extend(pb * (proceeds + held[0, i + 1]) + (1 - pb) * flat[i + 1]
-                          - .5 * p["gamma_usdc"] * target ** 2 * variance[i] * (1 - ob)
-                          - (target * mid * funding_rate * pb if funding_due else 0))
-        pick = int(np.argmax(scores))
-        flat[i] = scores[pick]
-        if i == 0 and quantity <= 0:
-            chosen = {"action": "wait" if pick == 0 else "buy",
-                      "price": None if pick == 0 else float(bid[pick - 1]),
-                      "quantity": target, "value": float(scores[pick]), "reason": "model"}
-    return chosen
+    bid_proceeds = target * (mid - bid) - fm * target * bid
+    q = quantities[:, None]
+    ask_proceeds = q * (ask - mid) - fm * q * ask
+    pick, value = _solve_quotes(bid_proceeds, ask_proceeds, pb, ob, pa, oa, variance,
+                                quantities, np.asarray(costs), float(p["gamma_usdc"]), mid,
+                                funding_rate, base, remaining_steps, STEP, 900)
+    if quantity > 0:
+        return {"action": "liquidate" if pick == 0 else ("wait" if pick == 1 else "sell"),
+                "price": limits[-1] if pick == 0 else (None if pick == 1 else float(ask[pick - 2])),
+                "quantity": quantity, "value": float(value), "reason": "model"}
+    return {"action": "wait" if pick == 0 else "buy", "price": None if pick == 0 else float(bid[pick - 1]),
+            "quantity": target, "value": float(value), "reason": "model"}
 
 
 def update_trial(state, equity, now, eligible, drawdown=TRIAL_DRAWDOWN, days=TRIAL_DAYS):

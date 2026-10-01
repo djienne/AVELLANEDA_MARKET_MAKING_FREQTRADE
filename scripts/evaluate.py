@@ -8,7 +8,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from backtest import replay
+from backtest import prepare_replay_events, replay
 from calculate_avellaneda_parameters import estimate, model_digest
 from quote_model import liquidation
 from utils import atomic_json, load_book_data, load_funding_data, load_trades_data, safe_read_parquet, stream_path, utc
@@ -88,9 +88,11 @@ def evaluate(data_root, ticker, start, end, output):
                 summary["reasons"].extend(problems)
             day = {"start": beginning.isoformat(), "end": finish.isoformat(),
                    "estimates_valid": not problems, "scenarios": {}}
+            prepared = prepare_replay_events(observed["book"], observed["trades"], schedule,
+                                             beginning, finish, funding)
             for name, options in scenarios.items():
                 result = replay(observed["book"], observed["trades"], schedule, beginning, finish,
-                                funding=funding, **options)
+                                funding=funding, prepared_events=prepared, **options)
                 atomic_json(output / f"{beginning.strftime('%Y%m%d')}_{name}.json", result)
                 day["scenarios"][name] = {k: result[k] for k in
                     ("valid", "errors", "net_pnl", "round_trips", "fees", "funding_paid", "max_drawdown")}

@@ -231,6 +231,41 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
 
 The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. Each day resets inventory and simulated risk state; the paper run tracks the continuous seven-day budget. The evaluator saves JSON ledgers, an evidence summary and a diagnostic figure.
 
+The quote recursion uses one Numba kernel shared by the bot and replay, with strict
+floating-point arithmetic (`fastmath=False`) and no parallel execution. Validation,
+timestamps and accounting remain in Python. Replay prepares column arrays and static
+events once per interval, then gives each scenario its own event heap and order state.
+
+On a captured 2.5-hour PAXG interval (16,632 books, 629 trades), five interleaved runs
+gave these median times, excluding file loading, estimation and first compilation:
+
+| Implementation | Replay time |
+| :--- | ---: |
+| Original Python | 4.08 s |
+| Array preparation, original quote solver | 2.51 s |
+| Arrays and Numba | 0.78 s |
+| Numba with prepared events reused | 0.30 s |
+
+Loading took 1.94 s; first kernel compilation took 3.04 s in the unrestricted research
+container. These are local measurements, not guarantees under the paper CPU quota.
+All ten saved gamma/latency scenarios retained identical fill/accounting ledgers.
+
+The bot warms the kernel before managing orders. `NUMBA_CACHE_DIR` points to
+`/freqtrade/state/numba_cache` for the bot and `/freqtrade/params/numba_cache` for
+research through the parameter service. These writable, gitignored host volumes
+preserve compilation caches across restarts; changing code can require recompilation.
+Keep the matching cache warm before restarting a bot with an existing position.
+Under the paper limits (0.1 CPU, 512 MiB), the isolated bot-import/warm-up check took
+59.1 s with a fresh cache and 34.3 s with a cached kernel; peak RSS was 408 and 366 MiB.
+These times exclude exchange initialization. They do not describe quote/network latency.
+
+`scripts/benchmark_replay.py` reproduces the timing/parity comparison in Docker.
+It takes `--data-dir`, `--schedule` (saved causal parameter publications),
+`--reference-dir` (pre-optimization `backtest.py`, `quote_model.py`, `utils.py`),
+`--start`, `--end`, and `--output`; `--repeats` defaults to five. Use a fresh writable
+`NUMBA_CACHE_DIR` to measure cold compilation. The report separates loading,
+preparation, first/warm kernel calls and replay timings, and records peak process RSS.
+
 The replay estimates queue position using the conservative approach in
 [hftbacktest's `RiskAdverseQueueModel`](https://github.com/nkaz001/hftbacktest/blob/master/hftbacktest/src/backtest/models/queue.rs).
 At exchange acceptance, an order joins behind the displayed size at its price.

@@ -20,49 +20,82 @@ def visible_queue(book, side, price):
     return None
 
 
-def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
-           all_taker=False, policy=quote_decision):
-    """Start flat with a fresh risk state; latency delays order activation and cancellation."""
+def prepare_replay_events(book, trades, parameters, start, end, funding=None):
+    """Return (start, end, event heap) for reuse with the same immutable inputs/interval."""
     start, end = utc(start), utc(end)
-    if end <= start or latency < 0:
-        raise ValueError("Invalid replay interval or latency")
-    events, serial = [], itertools.count()
+    if end <= start:
+        raise ValueError("Invalid replay interval")
+    beginning, finish = start.timestamp(), end.timestamp()
+    events = []
 
     def push(at, kind, value=None):
-        if start.timestamp() <= at <= end.timestamp():
+        if beginning <= at <= finish:
             # A same-time snapshot may already reflect a print: consume trades before
             # capping queue size. A new order cannot claim earlier same-time prints.
-            heapq.heappush(events, (float(at), int(kind != "trade"), next(serial), kind, value))
+            events.append((float(at), int(kind != "trade"), len(events), kind, value))
 
     rows = book[(book.index >= start - pd.Timedelta(seconds=2)) & (book.index <= end)]
-    for at, row in rows.iterrows():
-        snapshot = {"timestamp": at.timestamp() * 1000, "received_at": row.received_at.timestamp(),
-                    "bids": [], "asks": []}
-        for side, key in (("bid", "bids"), ("ask", "asks")):
-            for i in range(20):
-                price, size = row.get(f"{side}_price_{i}"), row.get(f"{side}_size_{i}")
-                if price is None or size is None or not np.isfinite([price, size]).all():
-                    break
-                snapshot[key].append([float(price), float(size)])
+    depths = []
+    for side in ("bid", "ask"):
+        columns = []
+        for i in range(20):
+            names = [f"{side}_price_{i}", f"{side}_size_{i}"]
+            if not all(name in rows for name in names):
+                break
+            columns.extend(names)
+        levels = rows[columns].to_numpy(dtype=float).reshape(len(rows), len(columns) // 2, 2)
+        counts = np.cumprod(np.isfinite(levels).all(axis=2), axis=1).sum(axis=1)
+        depths.append([values[:count].tolist() for values, count in zip(levels, counts)])
+    for i, (at, receipt, available) in enumerate(zip(rows.index, rows.received_at, rows.available_at)):
+        snapshot = {"timestamp": at.timestamp() * 1000, "received_at": receipt.timestamp(),
+                    "bids": depths[0][i], "asks": depths[1][i]}
         # Seed only observations actually available before the replay starts.
-        push(max(at.timestamp(), start.timestamp()), "book", snapshot)
-        push(max(row.available_at.timestamp(), start.timestamp()), "received_book", snapshot)
-    for at, row in trades[(trades.index >= start) & (trades.index <= end)].iterrows():
-        push(at.timestamp(), "trade", (row.side, float(row.price), float(row["size"])))
+        push(max(at.timestamp(), beginning), "book", snapshot)
+        push(max(available.timestamp(), beginning), "received_book", snapshot)
+    rows = trades[(trades.index >= start) & (trades.index <= end)]
+    if not rows.empty:
+        for at, side, price, size in zip(rows.index, rows.side.to_numpy(), rows.price.to_numpy(), rows["size"].to_numpy()):
+            push(at.timestamp(), "trade", (side, float(price), float(size)))
     for p in sorted(parameters, key=lambda p: p["timestamp"]):
         push(max(utc(p["timestamp"]).timestamp(), start.timestamp()), "parameters", p)
     funding = funding if funding is not None else pd.DataFrame()
     funding_hours = set()
     if not funding.empty:
-        for at, row in funding.iterrows():
+        marks = funding.mark_price.to_numpy() if "mark_price" in funding else itertools.repeat(None)
+        for at, rate, mark in zip(funding.index, funding.funding_rate.to_numpy(), marks):
             funding_hours.add(at.timestamp())
-            push(at.timestamp(), "funding", (float(row.funding_rate), row.get("mark_price")))
+            push(at.timestamp(), "funding", (float(rate), mark))
     for at in pd.date_range(start.ceil("h"), end, freq="h"):
         if at.timestamp() not in funding_hours:
             push(at.timestamp(), "missing_funding")
     for at in pd.date_range(start, end, freq="15s", inclusive="left"):
         push(at.timestamp(), "loop")
     push(end.timestamp(), "terminal")
+    heapq.heapify(events)
+    return start, end, events
+
+
+def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
+           all_taker=False, policy=quote_decision, prepared_events=None):
+    """Start flat; reuse prepared events only with the same immutable inputs/interval.
+
+    Each run owns its event heap and order/risk state. Latency delays activation/cancellation.
+    """
+    start, end = utc(start), utc(end)
+    if end <= start or latency < 0:
+        raise ValueError("Invalid replay interval or latency")
+    prepared = prepared_events if prepared_events is not None else prepare_replay_events(
+        book, trades, parameters, start, end, funding)
+    if prepared[:2] != (start, end):
+        raise ValueError("Prepared event interval mismatch")
+    events = list(prepared[2])
+    serial = itertools.count(len(events))
+    beginning, finish = start.timestamp(), end.timestamp()
+
+    def push(at, kind, value=None):
+        if beginning <= at <= finish:
+            heapq.heappush(events, (float(at), int(kind != "trade"), next(serial), kind, value))
+
     cash, quantity, fees, funding_paid = 0., 0., 0., 0.
     order, physical, received, params = None, None, None, None
     params_valid = False

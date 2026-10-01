@@ -12,7 +12,7 @@ from freqtrade.persistence import Trade
 from freqtrade.strategy import IStrategy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from quote_model import HORIZON, POSITION_STOP, STAKE, liquidation, quote_decision, update_trial, validate_book, validate_params
+from quote_model import HORIZON, POSITION_STOP, STAKE, liquidation, quote_decision, update_trial, validate_book, validate_params, warm_quote_kernel
 from utils import atomic_json, get_tick_size, utc
 
 log = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ class avellaneda(IStrategy):
             raise OperationalException("Exactly one pair and one open position are required")
         if self.config.get("fee") is not None:
             raise OperationalException("Remove the fee override: maker and taker costs must be distinct")
+        warm_quote_kernel()
         self.pair = pairs[0]
         options = self.config.get("avellaneda", {})
         self.paper_evaluation = options.get("paper_evaluation", False)

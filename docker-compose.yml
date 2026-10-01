@@ -22,6 +22,7 @@ services:
     environment:
       AVELLANEDA_PARAMS_DIR: /freqtrade/params
       AVELLANEDA_STATE: /freqtrade/state/trial.json
+      NUMBA_CACHE_DIR: /freqtrade/state/numba_cache
     ports: ["127.0.0.1:3004:8080"]
     volumes:
       - ./user_data:/freqtrade/user_data:ro
@@ -45,6 +46,7 @@ services:
     environment:
       HL_DATA_LOC: /freqtrade/market-data
       AVELLANEDA_PARAMS_DIR: /freqtrade/params
+      NUMBA_CACHE_DIR: /freqtrade/params/numba_cache
     entrypoint: ["python", "/freqtrade/scripts/calculate_avellaneda_parameters.py", "--loop"]
 
   hl-collector:
