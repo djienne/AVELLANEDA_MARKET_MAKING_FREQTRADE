@@ -14,7 +14,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "scripts"), str(ROOT / "user_data/strategies"), str(ROOT / "HL_data_collector")]
-from backtest import replay
+from backtest import replay, visible_queue
 from hyperliquid_data_collector import HyperliquidDataCollector
 from intensity import fit_maxima, window_depths
 from quote_model import next_unlock, quote_decision, update_trial, validate_params
@@ -201,6 +201,91 @@ class Checks(unittest.TestCase):
         buys = [f for f in out["fills"] if f["side"] == "buy"]
         self.assertEqual(len(buys), 1)
         self.assertAlmostEqual(buys[0]["quantity"], .2)
+
+    def test_queue_consumption_and_partial_fills_on_both_sides(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        for side in ("buy", "sell"):
+            with self.subTest(side=side):
+                book = recorded(start, 60)
+                book[["bid_size_0", "ask_size_0"]] = .3
+                book.loc[start + pd.Timedelta(seconds=60), "bid_size_0"] = 10.
+                # Queue is sampled on acceptance, not when the decision is made.
+                book.loc[start, ["bid_size_0", "ask_size_0"]] = 10.
+                price = 99.99 if side == "buy" else 100.01
+                seconds = [3, 4, 5] if side == "buy" else [20, 21, 22]
+                prints = [(s, "sell" if side == "buy" else "buy", price, q)
+                          for s, q in zip(seconds, [.2, .2, .5])]
+                if side == "sell":
+                    prints.insert(0, (3, "sell", 99.8, .5))
+                trades = pd.DataFrame({"side": [r[1] for r in prints], "price": [r[2] for r in prints],
+                                       "size": [r[3] for r in prints]},
+                                      index=[start + pd.Timedelta(seconds=r[0]) for r in prints])
+                def policy(p, b, now, q, remaining):
+                    return {"action": "buy" if q == 0 else ("sell" if side == "sell" else "wait"),
+                            "price": 99.9 if side == "sell" and q == 0 else price, "quantity": q or .5}
+                out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60),
+                             policy=policy)
+                self.assertTrue(out["valid"], out["errors"])
+                fills = [f for f in out["fills"] if f["side"] == side]
+                self.assertEqual([f["time"] - start.timestamp() for f in fills], seconds[1:])
+                np.testing.assert_allclose([f["quantity"] for f in fills], [.1, .4])
+                self.assertTrue(all(f["liquidity"] == "maker" for f in fills))
+
+    def test_queue_depth_caps_without_double_counting_or_inventing_fills(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 60)
+        book["bid_size_0"] = 1.
+        book.loc[start + pd.Timedelta(seconds=3), "bid_size_0"] = .4
+        book.loc[start + pd.Timedelta(seconds=4):, "bid_size_0"] = 2.
+        book.loc[start + pd.Timedelta(seconds=6), "bid_size_0"] = .01
+        trades = pd.DataFrame({"side": ["sell"] * 3, "price": [99.99] * 3, "size": [.6, .5, .2]},
+                              index=[start + pd.Timedelta(seconds=s) for s in (3, 5, 7)])
+        def policy(p, b, now, q, remaining):
+            return {"action": "buy" if q == 0 else "wait", "price": 99.99, "quantity": .5}
+        out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60),
+                     policy=policy)
+        buys = [f for f in out["fills"] if f["side"] == "buy"]
+        # The t=3 snapshot already includes that print. Later additions are behind us;
+        # the cancellation-only snapshot at t=6 cannot produce a fill by itself.
+        self.assertEqual([f["time"] - start.timestamp() for f in buys], [5, 7])
+        np.testing.assert_allclose([f["quantity"] for f in buys], [.1, .2])
+
+    def test_queue_unknown_depth_and_replacement_priority(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        b = live_book(start)
+        self.assertIsNone(visible_queue(b, "buy", 99.9))
+        self.assertIsNone(visible_queue(b, "sell", 100.1))
+        self.assertEqual(visible_queue(b, "buy", 100.), 0.)
+        self.assertEqual(visible_queue(b, "sell", 100.), 0.)
+        for price, expected in ((99.9, []), (99.99, [19])):
+            with self.subTest(price=price):
+                book = recorded(start, 60)
+                book["bid_size_0"] = .3
+                trades = pd.DataFrame({"side": ["sell"] * 3, "price": [price] * 3, "size": [.2] * 3},
+                                      index=[start + pd.Timedelta(seconds=s) for s in (3, 18, 19)])
+                def policy(p, b, now, q, remaining):
+                    return {"action": "buy" if q == 0 else "wait", "price": price, "quantity": .5}
+                out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60),
+                             policy=policy)
+                buys = [f for f in out["fills"] if f["side"] == "buy"]
+                # Cancel ack at t=16; replacement accepted at t=17 loses the old .1 priority.
+                self.assertEqual([f["time"] - start.timestamp() for f in buys], expected)
+
+    def test_risk_stop_uses_only_received_book(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 60)
+        at = start + pd.Timedelta(seconds=30)
+        book.loc[at, ["mid_price", "bid_price_0", "ask_price_0"]] = [98., 97.99, 98.01]
+        book.loc[at, ["received_at", "available_at"]] = at + pd.Timedelta(milliseconds=900)
+        trades = pd.DataFrame({"side": ["sell"], "price": [99.8], "size": [.5]},
+                              index=[start + pd.Timedelta(seconds=3)])
+        def policy(p, b, now, q, remaining):
+            return {"action": "buy" if q == 0 else "wait", "price": 99.9, "quantity": .5}
+        out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60),
+                     policy=policy)
+        sells = [f for f in out["fills"] if f["side"] == "sell"]
+        self.assertTrue(out["valid"], out["errors"])
+        self.assertEqual([f["time"] - start.timestamp() for f in sells], [60])
 
     def test_invalid_update_liquidates_existing_position(self):
         start = pd.Timestamp("2026-10-01T12:01:00Z")

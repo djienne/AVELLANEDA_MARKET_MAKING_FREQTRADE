@@ -231,11 +231,26 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
 
 The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. Each day resets inventory and simulated risk state; the paper run tracks the continuous seven-day budget. The evaluator saves JSON ledgers, an evidence summary and a diagnostic figure.
 
+The replay estimates queue position using the conservative approach in
+[hftbacktest's `RiskAdverseQueueModel`](https://github.com/nkaz001/hftbacktest/blob/master/hftbacktest/src/backtest/models/queue.rs).
+At exchange acceptance, an order joins behind the displayed size at its price.
+Same-price trades consume that size before partially filling our order. New volume
+joins behind us; a smaller snapshot caps the ahead estimate but never generates a
+fill by itself. Same-timestamp prints precede snapshot adjustments to avoid counting
+the same depletion twice. Cancellation leaves the order exposed until acknowledgement,
+and replacement loses priority. Beyond the captured depth, the queue remains unknown:
+same-price prints cannot fill it until depth is observed or a trade goes through the
+quote. Through-print fills remain capped by observed trade volume, unlike hftbacktest's
+full-fill assumption. This is a small-order approximation with no market impact or
+fitted cancellation probabilities. Risk decisions use received books; exchange-side
+fills and terminal liquidation use exchange books.
+
 The normal evidence gate requires seven complete out-of-sample days, 100 completed round trips and positive one-sided 95% block-bootstrap lower bounds for base and five-second latency scenarios. Two-day-block sensitivity must also remain positive. Missing observations or insufficient samples remain **inconclusive**.
 
 ### Remaining scientific limits
 
 - Public-trade replay and Freqtrade dry-run have different fill mechanisms. Neither validates live queue position.
+- Five-level snapshots cannot reveal exact FIFO priority. Order latency is fixed, fill acknowledgements are immediate, and the replay does not reproduce every Freqtrade entry-veto/timeout path. Queue estimates require calibration against actual executions before relying on small parameter differences.
 - The binary full-fill arrival model approximates a market with partial execution; the ledger still accounts for actual simulated partial quantities.
 - A finite, fixed reference price within the control calculation omits predictive drift and explicit adverse-selection dynamics. Post-fill markouts are recorded to test that assumption.
 - Funding marks use the observed mark when available, otherwise the contemporaneous book midpoint as a valuation proxy.

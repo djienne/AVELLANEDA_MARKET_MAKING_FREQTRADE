@@ -1,4 +1,4 @@
-"""Event-ordered public-data replay. It is an execution proxy, not a live queue simulation."""
+"""Event-ordered public-data replay with a conservative L2 queue estimate, not live priority."""
 import heapq
 import itertools
 
@@ -7,6 +7,17 @@ import pandas as pd
 
 from quote_model import HORIZON, POSITION_STOP, liquidation, next_unlock, quote_decision, update_trial, validate_params
 from utils import utc
+
+
+def visible_queue(book, side, price):
+    """Displayed same-side size, zero inside captured depth, or None beyond its boundary."""
+    levels = book["bids" if side == "buy" else "asks"]
+    for level, size in levels:
+        if abs(level - price) < 1e-8:
+            return size
+    if levels and (price >= levels[-1][0] if side == "buy" else price <= levels[-1][0]):
+        return 0.
+    return None
 
 
 def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
@@ -19,7 +30,9 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
 
     def push(at, kind, value=None):
         if start.timestamp() <= at <= end.timestamp():
-            heapq.heappush(events, (float(at), next(serial), kind, value))
+            # A same-time snapshot may already reflect a print: consume trades before
+            # capping queue size. A new order cannot claim earlier same-time prints.
+            heapq.heappush(events, (float(at), int(kind != "trade"), next(serial), kind, value))
 
     rows = book[(book.index >= start - pd.Timedelta(seconds=2)) & (book.index <= end)]
     for at, row in rows.iterrows():
@@ -58,14 +71,14 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
     state = {"started_at": None, "peak_equity": None, "stopped": None}
     pending_cancel = False
 
-    def mark(at):
-        if physical is None or at - physical["timestamp"] / 1000 > 2:
+    def mark(at, snapshot):
+        if snapshot is None or at - snapshot["timestamp"] / 1000 > 2:
             return None
         if quantity <= 1e-12:
             return cash
         try:
             fee = (params["market"]["taker_fee"] if params else .00045) + fee_extra
-            return cash + liquidation(physical, quantity, fee)[0]
+            return cash + liquidation(snapshot, quantity, fee)[0]
         except ValueError:
             return None
 
@@ -105,12 +118,23 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
                 order = None
                 break
 
+    def update_queue():
+        if order is None or not order["active"] or physical is None:
+            return
+        size = visible_queue(physical, order["side"], order["price"])
+        if size is not None:
+            # Like hftbacktest's RiskAdverseQueueModel: cancellations are behind us
+            # unless total depth forces a smaller ahead estimate; additions stay behind.
+            # Missing levels outside our five-level feed never imply an empty queue.
+            ahead = order["ahead"]
+            order["ahead"] = size if ahead is None else min(ahead, size)
+
     def decide(at):
         nonlocal order, state, cooldown, closed_pending
         now = pd.Timestamp(at, unit="s", tz="UTC")
         if closed_pending:
             cooldown, closed_pending = next_unlock(at), False
-        value = mark(at)
+        value = mark(at, received)  # Risk decisions cannot see unreceived exchange books.
         eligible = False
         if params_valid and params is not None:
             try:
@@ -121,7 +145,7 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         state = update_trial(state, None if value is None else 1000 + value, now, eligible)
         if value is not None:
             equity.append({"time": at, "liquidation_pnl": value, "quantity": quantity,
-                           "mid_pnl": cash + quantity * sum(physical[s][0][0] for s in ("bids", "asks")) / 2})
+                           "mid_pnl": cash + quantity * sum(received[s][0][0] for s in ("bids", "asks")) / 2})
         protective = bool(state["stopped"] or not eligible)
         if quantity and first_fill is not None:
             protective |= at - first_fill >= HORIZON
@@ -142,13 +166,15 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         if decision["action"] == "wait":
             return
         side = "buy" if decision["action"] == "buy" else "sell"
-        order = {"side": side, "price": decision["price"], "remaining": decision["quantity"], "active": False}
+        order = {"side": side, "price": decision["price"], "remaining": decision["quantity"],
+                 "active": False, "ahead": None}
         push(at + latency, "activate", order)
 
     while events:
-        at, _, kind, item = heapq.heappop(events)
+        at, _, _, kind, item = heapq.heappop(events)
         if kind == "book":
             physical = item
+            update_queue()
         elif kind == "received_book":
             received = item
         elif kind == "parameters":
@@ -162,6 +188,8 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
             if order is item:
                 order["active"] = True
                 execute_marketable(at)
+                if physical is not None and at - physical["timestamp"] / 1000 <= 2:
+                    update_queue()  # Join at exchange acceptance, not local submission.
         elif kind == "cancel":
             order, pending_cancel = None, False
             decide(at)
@@ -176,9 +204,21 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
                 decide(at)
         elif kind == "trade" and order is not None and order["active"]:
             side, price, amount = item
+            opposite = side == ("sell" if order["side"] == "buy" else "buy")
+            touched = opposite and abs(price - order["price"]) < 1e-8
             crossed = ((order["side"] == "buy" and side == "sell" and price < order["price"]) or
                        (order["side"] == "sell" and side == "buy" and price > order["price"]))
+            if touched:
+                if order["ahead"] is None:
+                    continue  # No queue claim outside observed depth.
+                consumed = min(amount, order["ahead"])
+                order["ahead"] -= consumed
+                amount -= consumed
             if crossed:
+                order["ahead"] = 0.
+            if (crossed or touched) and amount > 1e-12:
+                # Retain the volume cap even for through-prints: historical flow does
+                # not include our hypothetical order's demand for liquidity.
                 amount = min(amount, order["remaining"], quantity if order["side"] == "sell" else amount)
                 fill(at, order["side"], amount, order["price"], False)
                 order["remaining"] -= amount
@@ -198,7 +238,7 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
             errors.append("Settled funding observation missing")
         elif kind == "terminal":
             order = None
-            value = mark(at)
+            value = mark(at, physical)
             if value is None:
                 errors.append("Terminal liquidation unobservable")
             else:
@@ -222,4 +262,4 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
     return {"valid": not errors, "errors": sorted(set(errors)), "net_pnl": cash if not quantity else None,
             "fees": fees, "funding_paid": funding_paid, "round_trips": len(cycles),
             "max_drawdown": max_dd, "fills": fills, "cycles": cycles, "equity": equity,
-            "latency_seconds": latency, "trial_state": state}
+            "latency_seconds": latency, "queue_model": "conservative_l2", "trial_state": state}
