@@ -35,7 +35,7 @@ def fit_maxima(depths, tick, seconds=15):
 
 
 def window_depths(book, trades, start, end, quantity, seconds=15):
-    """Maximum distance with enough strictly-through volume to fill the intended quantity."""
+    """Full-quantity strict-crossing maxima; exclude incomplete or clock-uncertain windows."""
     if quantity <= 0:
         raise ValueError("Positive order quantity required")
     start, end = pd.Timestamp(start).ceil(f"{seconds}s"), pd.Timestamp(end).floor(f"{seconds}s")
@@ -68,6 +68,7 @@ def window_depths(book, trades, start, end, quantity, seconds=15):
 
 
 def estimate_intensity(depths, tick, seconds=15, min_windows=1000, min_events=30, bootstrap=32):
+    """Fit window maxima; optional circular bootstrap groups successive accepted windows."""
     depths = np.asarray(depths, float)
     if not np.isfinite(depths).all() or tick <= 0:
         raise ValueError("Invalid crossing observations")

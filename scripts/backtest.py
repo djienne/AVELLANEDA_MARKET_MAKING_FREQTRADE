@@ -11,6 +11,7 @@ from utils import utc
 
 def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
            all_taker=False, policy=quote_decision):
+    """Start flat with a fresh risk state; latency delays order activation and cancellation."""
     start, end = utc(start), utc(end)
     if end <= start or latency < 0:
         raise ValueError("Invalid replay interval or latency")

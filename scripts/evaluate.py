@@ -10,11 +10,12 @@ import pandas as pd
 
 from backtest import replay
 from calculate_avellaneda_parameters import estimate, model_digest
-from quote_model import HORIZON, liquidation
+from quote_model import liquidation
 from utils import atomic_json, load_book_data, load_funding_data, load_trades_data, safe_read_parquet, stream_path, utc
 
 
 def lower_bound(values, block_days=1):
+    """One-sided 95% circular block-bootstrap bound on mean PnL per usable day."""
     values = np.asarray(values, float)
     if len(values) < 7:
         return None
@@ -41,6 +42,7 @@ def fixed_quote(p, book, now, quantity, remaining):
 
 
 def evaluate(data_root, ticker, start, end, output):
+    """Refit chronologically; each replay day resets inventory and the simulated risk budget."""
     start, end = utc(start), utc(end)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)

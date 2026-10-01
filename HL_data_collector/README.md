@@ -21,15 +21,16 @@ The default subscriptions are PAXG and ETH. The fast L2 stream supplies five lev
 
 Each stream has a `{kind}_{SYMBOL}.parquet/` directory. Kinds are `orderbooks`, `trades`, `prices`, `contexts` and `funding`.
 
-- Exchange time and local receipt time are preserved.
+- Books, trades, BBO and settled funding preserve exchange time and local receipt time. Asset contexts are timestamped at receipt.
 - Schemas use explicit nullable types, including temporarily absent depth levels.
 - A batch is published after five minutes or 10,000 rows. Only closed, atomically renamed parquet files are visible to readers.
 - Failed writes retain their pending records. Buffer overflow is fatal and reported, rather than silently discarding old observations.
 - Settled funding history is separate from the current funding prediction in asset contexts.
 - Timestamped market metadata records quantity precision, minimum size and public maker/taker fees.
 - `health.json` reports subscriptions, per-symbol book freshness, pending/published counts and errors.
-- Disconnects and stalled feeds trigger resubscription, with ten-second connection timeouts and two-to-thirty-second retry backoff. Old freshness is cleared on reconnect.
+- Disconnects and stalled feeds trigger resubscription, with ten-second socket timeouts and two-to-thirty-second retry backoff. Old freshness is cleared on reconnect.
 - Graceful shutdown flushes buffered records. After an abrupt crash, published batches remain readable; the unpublished batch can be lost, and temporary files are ignored.
+- Malformed messages or buffer overflow leave a fatal latch in `health.json` that requires inspection before restarting; network reconnection does not clear data-integrity faults.
 
 The calculator also validates event timestamps, coverage and trade identities. An empty trade window is only usable when its surrounding capture is valid. Public streams do not expose an authenticated order's queue position.
 

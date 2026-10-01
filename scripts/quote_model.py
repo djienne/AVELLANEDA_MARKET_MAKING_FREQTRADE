@@ -119,7 +119,7 @@ def _quotes(mid, touch, model, sz_decimals, buy):
     n = int(math.floor((upper - lower) / tick)) + 1
     if n <= 0:
         return np.array([])
-    # Wide tails can contain thousands of ticks. Cap the search; compare a doubled grid in diagnostics.
+    # Cap wide tails at 512 candidates to bound runtime; wider fits need a grid-convergence check.
     offsets = np.unique(np.linspace(0, n - 1, min(n, 512), dtype=int))
     prices = np.array([round_price(mid + (-1 if buy else 1) * (lower + i * tick), sz_decimals, buy)
                        for i in offsets])

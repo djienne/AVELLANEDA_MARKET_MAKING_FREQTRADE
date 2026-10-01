@@ -1,34 +1,34 @@
-﻿# Repository Guidelines
+# Repository Guidelines
 
-## Project Structure & Module Organization
-- `scripts/` contains the parameter calculator (`calculate_avellaneda_parameters.py`, `volatility.py`, `intensity.py`, `backtest.py` which simulates the deployed bot) writing `avellaneda_parameters_{TICKER}.json` to `scripts/` unless `AVELLANEDA_PARAMS_DIR` is set.
-- `user_data/` hosts Freqtrade config (`config.json`), strategy logic in `strategies/avellaneda.py`, and runtime artifacts (`logs/`, `tradesv3.sqlite`, `data/`, `hyperopt_results/`).
-- `HL_data_collector/` captures Hyperliquid streams via `run_collector.py`, persisting parquet files under `HL_data_collector/HL_data/`.
-- Root utilities: `docker-compose.yml` wires `freqtrade_mm` + `hl-params` (recalculates parameters every 15 min) + `hl-collector`; API credentials come from a gitignored `.env`; `Dockerfile.technical` extends the bot image; `show_PnL.py` and `test_env.py` are local diagnostics.
+## Layout and runtime
 
-## Build, Test, and Development Commands
-- `docker-compose build` builds the freqtrade bot image (with `Dockerfile.technical`) and the collector.
-- `docker-compose up` starts the bot (using `user_data/config.json` + `strategies/avellaneda.py`), the parameter service and the data collector with persistent host volumes; use `docker-compose down` to stop/clean containers.
-- `python scripts/calculate_avellaneda_parameters.py PAXG` recomputes parameters from `HL_data_collector/HL_data` and emits `scripts/avellaneda_parameters_PAXG.json`; override input/output with `HL_DATA_LOC` / `AVELLANEDA_PARAMS_DIR`. The shared quote policy is in `scripts/quote_model.py`; `scripts/evaluate.py` runs chronological public-data replay.
-- `python HL_data_collector/run_collector.py` runs the collector outside Docker; configure with `SYMBOLS`, `OUTPUT_DIR`, and `ORDERBOOK_DEPTH` env vars.
-- `python test_env.py` quickly verifies key numeric dependencies; `python show_PnL.py` inspects stored trades.
+- `scripts/` contains the estimator, shared quote policy, public-data replay, evaluator and runnable scientific checks.
+- `user_data/config.json` configures one Hyperliquid pair; `user_data/strategies/avellaneda.py` implements the paper-only Freqtrade callbacks. The calculator defaults to that configured pair unless a ticker is supplied.
+- `HL_data_collector/run_collector.py` captures public streams. The collector, calculator and bot share the image built by `Dockerfile.technical`.
+- `docker-compose.yml` defines the three services. The isolated experiment uses `compose.paper.yml` and project name `avellaneda-paper`; follow the build/start commands in [README.md](README.md#start).
+- Paper files live under gitignored `runtime/paper/`: `market-data/`, `params/` and `state/`. The latter holds `trades.sqlite`, `trial.json` and `freqtrade.log`. Default Compose paths use `runtime/main/`.
+- Credentials come from gitignored `.env`. The calculator publishes every fifteen minutes when valid and retries failed calculations after one minute.
 
-## Coding Style & Naming Conventions
-- Python 3.x with 4-space indentation; prefer type hints and `pathlib.Path` for file handling.
-- Use snake_case for functions/variables, PascalCase for classes, and uppercase for constants/env keys.
-- Keep strategy parameters in JSON named `avellaneda_parameters_{TICKER}.json` (uppercase ticker) to align with config whitelists.
-- Log with the existing `logging` setup; avoid ad-hoc prints in strategy code.
+## Validation
 
-## Testing Guidelines
-- Run `python scripts/check_pipeline.py` after touching `scripts/` or the strategy's quote formula (known-truth, reference and end-to-end checks; ~10 s).
-- When modifying parameter generation, run `python scripts/calculate_avellaneda_parameters.py ETH` and confirm the summary plus JSON output looks sane.
-- For end-to-end validation, start `docker-compose up` in dry-run mode and watch `user_data/logs/` for clean startup (no stack traces).
+Use Docker Compose for checks; do not rely on a different host Python environment.
 
-## Commit & Pull Request Guidelines
-- Follow the repo's short, imperative commit style (`Update README.md`, `Add ETH parameters`); keep scope focused and messages under ~72 chars.
-- In PRs, describe the intent, list commands/logs run (e.g., `docker-compose up`, parameter calculator output), and link any related issue or trading-pair change.
-- Include screenshots or log snippets when altering strategy behavior, configs, or collector settings; avoid committing generated data (`HL_data_collector/HL_data`, `tradesv3.sqlite*`, large logs).
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml run --rm --no-deps --entrypoint python hl-params /freqtrade/scripts/check_pipeline.py
+```
 
-## Security & Configuration Tips
-- Do not commit secrets or API keys; rely on env vars (`HL_DATA_LOC`, `AVELLANEDA_PARAMS_DIR`, `SYMBOLS`, `OUTPUT_DIR`) and keep them out of git.
-- Generated parquet data and SQLite trade logs may contain sensitive trading history; treat them as local-only and gitignored by default.
+After estimator changes, also run it on captured data, keeping diagnostic output separate from the running writer:
+
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml run --rm --no-deps --entrypoint python hl-params /freqtrade/scripts/calculate_avellaneda_parameters.py ETH --output-dir /freqtrade/params/diagnostics
+```
+
+Inspect the result and blocking reasons. Insufficient data is inconclusive; tests and a running process do not establish profitability. For runtime changes, verify collector health, parameters, trial state and Compose logs. Preserve the paper database and risk-stop state across restarts.
+
+## Code and delivery
+
+- Use four-space indentation, snake_case functions/variables, PascalCase classes, and uppercase constants/environment variables.
+- Reuse the shared loaders and quote policy. Keep units, assumptions and validity limits close to the model; avoid duplicate implementations and parameter-format compatibility code.
+- Use `Path` for files and the existing logger for strategy diagnostics. Add a focused runnable check for non-trivial logic.
+- Keep commits focused, with short imperative messages and relevant validation evidence. Never commit credentials, generated market data, parameter snapshots, databases or logs.
+- CPU and API-rate limits are managed by the parent workspace's central tools; do not hand-edit them or touch other bots.

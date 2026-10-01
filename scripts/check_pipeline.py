@@ -17,8 +17,8 @@ sys.path[:0] = [str(ROOT / "scripts"), str(ROOT / "user_data/strategies"), str(R
 from backtest import replay
 from hyperliquid_data_collector import HyperliquidDataCollector
 from intensity import fit_maxima, window_depths
-from quote_model import liquidation, next_unlock, quote_decision, update_trial, validate_params
-from utils import atomic_json, load_book_data, load_funding_data, load_trades_data, mid_grid
+from quote_model import next_unlock, quote_decision, update_trial, validate_params
+from utils import atomic_json, load_funding_data, load_trades_data
 from volatility import forecast_variance
 
 
@@ -71,7 +71,6 @@ class Checks(unittest.TestCase):
                 validate_params(bad, p["pair"], now)
 
     def test_garch_failure_uses_fallback(self):
-        from volatility import arch_model
         now = pd.Timestamp("2026-10-01", tz="UTC")
         prices = pd.Series(100 * np.exp(np.cumsum(np.random.default_rng(1).normal(0, 1e-4, 1000))),
                            index=pd.date_range(now, periods=1000, freq="5s"))

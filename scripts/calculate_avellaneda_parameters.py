@@ -4,20 +4,17 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import sys
 import time
 
 import numpy as np
 import pandas as pd
 
 from intensity import estimate_intensity, window_depths
-from quote_model import GAMMA_USDC, HORIZON, STAKE, validate_params
+from quote_model import GAMMA_USDC, STAKE, validate_params
 from utils import atomic_json, get_tick_size, load_book_data, load_trades_data, mid_grid, safe_read_parquet, stream_path, utc
 from volatility import forecast_variance
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "user_data" / "strategies"))
-from pair_loader import get_active_pair
 
 
 def model_digest():
@@ -144,7 +141,11 @@ def main():
     parser.add_argument("--evidence", default=os.getenv("AVELLANEDA_EVIDENCE"))
     parser.add_argument("--loop", action="store_true")
     args = parser.parse_args()
-    ticker = (args.ticker or get_active_pair().split("/")[0]).upper()
+    if args.ticker is None:
+        config = json.loads((ROOT / "user_data/config.json").read_text(encoding="utf-8"))
+        pair, = config["exchange"]["pair_whitelist"]  # the deployed policy supports exactly one pair
+        args.ticker = pair.split("/")[0]
+    ticker = args.ticker.upper()
     while True:
         started = time.monotonic()
         try:

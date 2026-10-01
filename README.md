@@ -65,7 +65,7 @@ $$
 | Symbol | Meaning | Units |
 | :--- | :--- | :--- |
 | $s_t,S_t$ | Top-of-book midpoint | USDC per base unit |
-| $X_t$ | Cash-flow ledger | USDC |
+| $X_t$ | Cash-flow ledger, including fees and funding | USDC |
 | $q_t$ | Actual inventory, including partial fills | Base units |
 | $v_t$ | Forecast price-variance rate | Squared price units per second |
 | $C_{\mathrm{liq}}$ | Spread/depth cost and taker fee of selling the remaining position | USDC |
@@ -75,7 +75,7 @@ $$
 
 The initial research coefficient is $\gamma_{\$}=2\;\mathrm{USDC}^{-1}$. It is a declared experiment setting, not a fitted market property. Cash, quantity and price units are kept consistent when the stake or asset denomination changes.
 
-A small backward dynamic program considers **wait, passive quote and liquidation** actions on a 15-second decision grid. It includes the 15-minute candle lock after a completed Freqtrade trade. The planning horizon is 30 minutes; an existing position's deadline also counts down from its first fill.
+A small backward dynamic program considers **wait, passive quote and liquidation** actions on a 15-second decision grid. A completed Freqtrade trade locks re-entry until the end of the current 15-minute candle. The planning horizon is 30 minutes; an existing position's deadline also counts down from its first fill.
 
 The reference mid and arrival coefficients are frozen within each planning calculation. Forecast variance evolves through the horizon. A partial fill is managed using its actual remaining quantity. These are receding-horizon approximations, not a claim of exact optimality in a live queue.
 
@@ -107,7 +107,7 @@ $$
 P(D<d)=\exp\!\left[-A\Delta t\,e^{-kd}\right].
 $$
 
-An interval-censored likelihood counts each window once. Bid and ask fits are separate. Quotes are restricted to the empirically supported distance range; the outer boundary needs at least 20 supporting crossings. Uncertainty uses contiguous 30-minute blocks.
+An interval-censored likelihood counts each window once. Bid and ask fits are separate. Quotes are restricted to the empirically supported distance range; the outer boundary needs at least 20 supporting crossings. Optional uncertainty estimates use circular blocks of 120 accepted windows: nominally 30 minutes, longer when capture gaps have been excluded. The offline evaluator skips this intensity bootstrap during its repeated fits.
 
 This estimates a **full-quantity public crossing proxy**. It does not estimate an authenticated order's queue position.
 
@@ -144,9 +144,9 @@ There is **one current parameter format**, with no schema version or compatibili
 
 These are trigger thresholds, not guaranteed execution bounds. Outages, gaps and execution delay can cause overshoot.
 
-Normal orders are GTC; the adapter does not guarantee post-only execution. Stop-loss/emergency orders use market execution. Deadline and drawdown exits use aggressive reduce-only limits at executable bid depth, then continue managing any residual.
+Normal orders are GTC; the adapter does not guarantee post-only execution. Native price-stop/emergency orders use market execution. Net-loss, deadline and drawdown exits use aggressive reduce-only limits at executable bid depth, then continue managing any residual.
 
-The shared policy defaults are defined in `scripts/quote_model.py`. Changing experiment settings requires reevaluation; the current 50-USDC stake and native stop also appear in the Freqtrade configuration.
+The shared policy defaults are defined in `scripts/quote_model.py`. Changing experiment settings requires reevaluation; the 50-USDC stake must also match `stake_amount` in the Freqtrade configuration.
 
 ### Start
 
@@ -178,6 +178,14 @@ runtime/paper/
 
 `trial.json` reports the current state and blocking reason. `waiting_for_valid_data` is expected during warm-up. An elapsed six hours alone does not authorize an entry: coverage, crossing counts, model validity and the chosen action must also qualify.
 
+Read Freqtrade's native PnL summary using the bot's existing API credentials:
+
+```bash
+docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml exec -T freqtrade_mm python /freqtrade/scripts/show_pnl.py
+```
+
+These framework metrics differ from the executable liquidation equity used by the risk stop in `trial.json`.
+
 The collector uses Hyperliquid's **fast five-level book stream**. A local probe measured approximately 0.55 seconds between fast snapshots versus 5.22 seconds for the default twenty-level stream. These measurements describe that probe, not a latency guarantee.
 
 The paper Compose override is separate from the default `runtime/main/` paths. Existing historical databases are not reused or reset. CPU and API-rate limits on a shared host remain managed by the workspace's central tooling.
@@ -201,13 +209,15 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
 
 Checks include synthetic parameter recovery, future-data invariance, failed GARCH fits, an independently enumerated small control problem, denomination scaling, Freqtrade's candle lock, partial fills, cancellation races, terminal losses, rejected parameter updates, persistent stops, SQLite order/deadline restoration, reconnects and parquet failure recovery.
 
-For a single calculation:
+For a diagnostic calculation, write to a separate directory so it cannot race the running parameter service:
 
 ```bash
 docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
   run --rm --no-deps --entrypoint python hl-params \
-  /freqtrade/scripts/calculate_avellaneda_parameters.py PAXG
+  /freqtrade/scripts/calculate_avellaneda_parameters.py PAXG --output-dir /freqtrade/params/diagnostics
 ```
+
+`scripts/verify_effective_price.py` reads a captured book file or parquet directory through the production loader and summarizes bid, ask and midpoint prices; `--start` and `--end` accept timezone-aware timestamps.
 
 For a chronological replay, replace the example dates with an interval having a preceding calibration history:
 
@@ -219,7 +229,7 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
   --output /freqtrade/params/evaluation
 ```
 
-The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. It saves JSON ledgers, an evidence summary and a diagnostic figure.
+The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. Each day resets inventory and simulated risk state; the paper run tracks the continuous seven-day budget. The evaluator saves JSON ledgers, an evidence summary and a diagnostic figure.
 
 The normal evidence gate requires seven complete out-of-sample days, 100 completed round trips and positive one-sided 95% block-bootstrap lower bounds for base and five-second latency scenarios. Two-day-block sensitivity must also remain positive. Missing observations or insufficient samples remain **inconclusive**.
 
@@ -242,6 +252,8 @@ The normal evidence gate requires seven complete out-of-sample days, 100 complet
 | López de Prado, *Advances in Financial Machine Learning*, Chapters 7, 11 and 12 | Leakage, selection bias and chronological evaluation |
 | Jansen, *Machine Learning for Algorithmic Trading*, Chapter 9 | Volatility modelling and residual/forecast diagnostics |
 | [Hyperliquid fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) and [funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding) | Cost assumptions |
+
+The [Francesco Mangia notebook](scripts/Francesco_Mangia_Avellaneda_BTC.ipynb) is retained as a historical reference with its original code and notes. It uses external datasets and different execution assumptions; its conclusions are not validation of this implementation. Cached execution outputs have been removed.
 
 ## Support
 
