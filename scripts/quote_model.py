@@ -13,6 +13,7 @@ STAKE = 50.0
 POSITION_STOP = .01
 TRIAL_DRAWDOWN = 10.0
 TRIAL_DAYS = 7
+MIN_COVERAGE = .90
 
 
 def number(value, name, minimum=0, strict=False):
@@ -40,7 +41,7 @@ def validate_params(p, pair, now):
         raise ValueError("Invalid trade chronology")
     if now > expires or expires > min(end, trades_end) + pd.Timedelta(minutes=30) or expires <= calculated:
         raise ValueError("Expired parameters")
-    if (end - start).total_seconds() < 6 * 3600 or number(p["coverage"], "coverage") < .95:
+    if (end - start).total_seconds() < 6 * 3600 or number(p["coverage"], "coverage") < MIN_COVERAGE:
         raise ValueError("Insufficient data coverage")
     market = p["market"]
     if market["symbol"] != pair or type(market["sz_decimals"]) is not int or not 0 <= market["sz_decimals"] <= 6:

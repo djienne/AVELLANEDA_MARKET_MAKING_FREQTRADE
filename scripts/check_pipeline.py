@@ -62,7 +62,10 @@ class Checks(unittest.TestCase):
         now = pd.Timestamp.now(tz="UTC")
         p = parameters(now)
         validate_params(p, p["pair"], now)
+        p["coverage"] = .90
+        validate_params(p, p["pair"], now)
         for key, value in [("data_valid", "true"), ("gamma_usdc", 0.), ("quantity", float("nan")),
+                           ("coverage", .8999),
                            ("data_end", (now + pd.Timedelta(days=7)).isoformat()),
                            ("pair", "ETH/USDC:USDC")]:
             bad = copy.deepcopy(p)
@@ -299,6 +302,16 @@ class Checks(unittest.TestCase):
             with patch("calculate_avellaneda_parameters.pd", clock):
                 live = estimate("PAXG", td, bootstrap=0)
             self.assertTrue(live["data_valid"], live["reasons"])
+            for missing, allowed in ((1400, True), (2400, False)):
+                book.drop(book.index[3000:3000 + missing]).to_parquet(Path(td) / "orderbooks_PAXG.parquet")
+                gappy = estimate("PAXG", td, cutoff, bootstrap=0)
+                self.assertEqual(gappy["data_valid"], allowed, gappy["reasons"])
+                if allowed:
+                    self.assertTrue(.90 <= gappy["coverage"] < .95)
+                    self.assertTrue(.90 <= gappy["intensity_coverage"] < .95)
+                else:
+                    self.assertIn("Book coverage below 90%", gappy["reasons"])
+                    self.assertIn("Quote exposure coverage below 90%", gappy["reasons"])
 
     def test_collector_schema_and_retry(self):
         with tempfile.TemporaryDirectory() as td:

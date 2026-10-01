@@ -116,14 +116,14 @@ This estimates a **full-quantity public crossing proxy**. It does not estimate a
 The default calculation uses a trailing 24-hour window and requires:
 
 - At least six hours of data.
-- At least 95% usable book and quote-exposure coverage.
+- At least 90% usable book and quote-exposure coverage.
 - At least 1,000 exposure windows and 30 crossing windows per side.
 - Known market precision/fees, recent funding context and healthy collection.
 - Finite, correctly typed parameters and a valid UTC chronology.
 
 A failed calculation publishes a disabled result. The bot rechecks inputs at entry confirmation; a missing or invalid update cannot leave a cached entry permission active.
 
-Bad historical clocks are counted and excluded from usable observations and affected quote-exposure windows. They never become zero-crossing observations. The 95% coverage requirements still apply; an invalid latest book blocks entry.
+Bad historical clocks are counted and excluded from usable observations and affected quote-exposure windows. They never become zero-crossing observations. The 90% coverage requirements still apply; an invalid latest book blocks entry.
 
 There is **one current parameter format**, with no schema version or compatibility layer. Files are named `avellaneda_parameters_{TICKER}.json`. Valid historical parameter snapshots and timestamped market metadata are retained for chronological research.
 

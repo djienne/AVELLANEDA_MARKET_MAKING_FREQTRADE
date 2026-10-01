@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from intensity import estimate_intensity, window_depths
-from quote_model import GAMMA_USDC, STAKE, validate_params
+from quote_model import GAMMA_USDC, MIN_COVERAGE, STAKE, validate_params
 from utils import atomic_json, get_tick_size, load_book_data, load_trades_data, mid_grid, safe_read_parquet, stream_path, utc
 from volatility import forecast_variance
 
@@ -54,8 +54,8 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
     grid_start, grid_end = data_start.ceil("5s"), data_end.floor("5s")
     mid = mid_grid(book, grid_start, grid_end)
     p["coverage"] = float(mid.notna().mean()) if len(mid) else 0.
-    if p["coverage"] < .95:
-        p["reasons"].append("Book coverage below 95%")
+    if p["coverage"] < MIN_COVERAGE:
+        p["reasons"].append(f"Book coverage below {MIN_COVERAGE:.0%}")
     candidates = list((Path(data_root) / f"market_{ticker}").glob("*.json"))
     candidates.append(Path(data_root) / f"market_{ticker}.json")
     known = []
@@ -89,8 +89,8 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
         p["reasons"].append("Trade capture is more than ten minutes old")
     windows = window_depths(book, trades, data_start, data_end, quantity)
     p["intensity_coverage"] = float(windows.attrs["coverage"])
-    if p["intensity_coverage"] < .95:
-        p["reasons"].append("Quote exposure coverage below 95%")
+    if p["intensity_coverage"] < MIN_COVERAGE:
+        p["reasons"].append(f"Quote exposure coverage below {MIN_COVERAGE:.0%}")
     tick = get_tick_size(reference, market["sz_decimals"])
     p["intensity"] = {}
     for side in ("bid", "ask"):
