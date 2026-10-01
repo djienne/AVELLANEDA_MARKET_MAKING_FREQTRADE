@@ -186,9 +186,50 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml ex
 
 These framework metrics differ from the executable liquidation equity used by the risk stop in `trial.json`.
 
-The collector uses Hyperliquid's **fast five-level book stream**. A local probe measured approximately 0.55 seconds between fast snapshots versus 5.22 seconds for the default twenty-level stream. These measurements describe that probe, not a latency guarantee.
-
 The paper Compose override is separate from the default `runtime/main/` paths. Existing historical databases are not reused or reset. CPU and API-rate limits on a shared host remain managed by the workspace's central tooling.
+
+### Collectors and data locations
+
+There are two separate archives. The current parameter service and all saved gamma/horizon
+sweeps use **this project's paper archive**, not the shared archive.
+
+| Location | Purpose |
+| :--- | :--- |
+| [HL_data_collector/run_collector.py](HL_data_collector/run_collector.py) | This project's collector entrypoint; implementation is [hyperliquid_data_collector.py](HL_data_collector/hyperliquid_data_collector.py) |
+| [docker-compose.yml](docker-compose.yml) + [compose.paper.yml](compose.paper.yml) | Service `hl-collector`, container `avellaneda-paper-hl-collector-1`; captures PAXG and ETH |
+| `runtime/paper/market-data/` | Paper capture on the host; mounted at `/freqtrade/market-data` in the collector and parameter service |
+| `runtime/paper/params/` | Current estimates and historical parameter snapshots used to reproduce decisions |
+| `runtime/paper/validation/` | Saved research scripts, reports, replay ledgers and parameter schedules |
+| `../HYPERLIQUID_DATA/docker-compose.yml` | Deployment of the separate shared crypto collector, service/container `hl-collector` |
+| `../Cartea-Jaimungal_MARKET_MAKING_FREQTRADE/scripts/` | Shared collector source: `run_collector.py` and `hyperliquid_data_collector.py` |
+| `../HYPERLIQUID_DATA/data/eth_mm/` | Shared crypto archive on the host; mounted at `/app/HL_data` in the shared collector |
+
+On the current Windows workspace, the two capture roots are:
+
+```text
+%USERPROFILE%\Desktop\freqtrade\AVELLANEDA_MARKET_MAKING_FREQTRADE\runtime\paper\market-data
+%USERPROFILE%\Desktop\freqtrade\HYPERLIQUID_DATA\data\eth_mm
+```
+
+The paper archive contains parquet-shard directories such as `orderbooks_PAXG.parquet/`,
+`trades_PAXG.parquet/`, `prices_PAXG.parquet/`, `contexts_PAXG.parquet/` and
+`funding_PAXG.parquet/`, plus `market_PAXG/` metadata history and `health.json`.
+Use `--data-dir /freqtrade/market-data` in the paper parameter-service container,
+or pass the corresponding host path when selecting research inputs.
+
+The shared archive uses `<COIN>/orderbooks/`, `prices/`, `trades/` and `asset_ctx/`.
+Despite its `eth_mm` name, it includes PAXG and other coins. It is useful additional
+public history, but is not a drop-in replacement for the complete paper archive:
+asset-context layout differs, and settled funding, market metadata and parameter
+snapshots must also be accounted for when reproducing the current pipeline.
+
+Both collectors request Hyperliquid's **fast book stream** and retain each received
+snapshot. The observed feed supplies five levels per side; a storage setting of 20
+does not create deeper levels. A local probe measured approximately 0.55 seconds
+between fast snapshots versus 5.22 seconds for the default twenty-level stream.
+These measurements describe that probe, not a latency guarantee. Book/trade archives
+preserve exchange and receipt clocks; trade records include price, size, side and ID.
+Keep these raw archives and private research outputs local and gitignored.
 
 ### Connection loss and PC restarts
 
