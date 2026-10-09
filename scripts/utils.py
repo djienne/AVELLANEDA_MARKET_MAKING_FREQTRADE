@@ -65,8 +65,16 @@ def _intersects(pf, start, end):
 def safe_read_parquet(path, start=None, end=None, columns=None):
     path = Path(path)
     start, end = (utc(start) if start is not None else None), (utc(end) if end is not None else None)
-    files = [path] if path.is_file() else sorted(path.glob("*.parquet"))
+    central = path.parent.parent.name == '_streams'
+    files = [] if central else ([path] if path.is_file() else sorted(path.glob("*.parquet")))
     frames, corrupt = [], []
+    if central:
+        from hl_reader import load
+        rows = load(path.parents[2], path.parent.name, path.name,
+                    start.timestamp() * 1000 if start is not None else None,
+                    end.timestamp() * 1000 if end is not None else None, columns=columns)
+        if rows:
+            frames.append(pd.DataFrame(rows))
     for part in files:
         try:
             pf = pq.ParquetFile(part)
@@ -103,6 +111,8 @@ def safe_read_parquet(path, start=None, end=None, columns=None):
 
 def stream_path(root, ticker, kind):
     root = Path(root)
+    if (root / 'events').is_dir():
+        return root / '_streams' / ticker / kind
     native = root / f"{kind}_{ticker}.parquet"
     return native if native.exists() else root / ticker / kind
 

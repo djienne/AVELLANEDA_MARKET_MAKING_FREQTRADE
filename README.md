@@ -17,7 +17,7 @@ The bot alternates between flat and one long position. A public-data collector s
 
 ```mermaid
 flowchart LR
-    HL["Hyperliquid<br/>public streams"] --> C["hl-collector"]
+    HL["Hyperliquid<br/>public streams"] --> C["Shared Hyperliquid hub"]
     C --> D[("Complete parquet parts<br/>books, trades, funding")]
     D --> P["hl-params<br/>causal estimation"]
     P --> J[("Validated parameter JSON")]
@@ -27,12 +27,12 @@ flowchart LR
 
 | Component | Responsibility |
 | :--- | :--- |
-| `hl-collector` | Typed, atomic parquet publication; subscription health; market metadata and settled funding |
+| Shared hub | Durable canonical Parquet publication; subscription health; market metadata and settled funding |
 | `hl-params` | Five-second volatility forecasts, size-aware crossing calibration and an explicit validity gate |
 | `freqtrade_mm` | Shared inventory policy, quantity/price checks, protective exits and persistent trial controls |
 | `scripts/evaluate.py` | Chronological replay, execution/cost sensitivities and uncertainty reporting |
 
-All three services use one project-owned image. The reference runtime is **Freqtrade 2025.10**, with **CCXT 4.5.84** pinned because the older connector cannot parse current Hyperliquid market metadata.
+The bot and parameter service use one project-owned image; the shared hub owns its separate image. The reference runtime is **Freqtrade 2025.10**, with **CCXT 4.5.84** pinned because the older connector cannot parse current Hyperliquid market metadata.
 
 ## Model
 
@@ -171,7 +171,7 @@ The API is bound to **127.0.0.1:3004**. Runtime files are isolated under `runtim
 
 ```text
 runtime/paper/
-├── market-data/       # Public capture, metadata and collector health
+├── market-data/       # Frozen legacy capture; new data is in the central hub
 ├── params/            # Current results and valid historical snapshots
 └── state/             # Paper database, trial.json and Freqtrade logs
 ```
@@ -190,54 +190,37 @@ The paper Compose override is separate from the default `runtime/main/` paths. E
 
 ### Collectors and data locations
 
-There are two separate archives. The current parameter service and all saved gamma/horizon
-sweeps use **this project's paper archive**, not the shared archive.
+Since 2026-10-09 there is one active tick archive, owned by the shared Hyperliquid
+hub. The parameter service and new replays use its canonical data through the
+shared Python reader; projection happens in memory and writes no second archive.
 
 | Location | Purpose |
 | :--- | :--- |
-| [HL_data_collector/run_collector.py](HL_data_collector/run_collector.py) | This project's collector entrypoint; implementation is [hyperliquid_data_collector.py](HL_data_collector/hyperliquid_data_collector.py) |
-| [docker-compose.yml](docker-compose.yml) + [compose.paper.yml](compose.paper.yml) | Service `hl-collector`, container `avellaneda-paper-hl-collector-1`; captures PAXG and ETH |
-| `runtime/paper/market-data/` | Paper capture on the host; mounted at `/freqtrade/market-data` in the collector and parameter service |
-| `runtime/paper/params/` | Current estimates and historical parameter snapshots used to reproduce decisions |
-| `runtime/paper/validation/` | Saved research scripts, reports, replay ledgers and parameter schedules |
-| `../HYPERLIQUID_DATA/docker-compose.yml` | Deployment of the separate shared crypto collector, service/container `hl-collector` |
-| `../Cartea-Jaimungal_MARKET_MAKING_FREQTRADE/scripts/` | Shared collector source: `run_collector.py` and `hyperliquid_data_collector.py` |
-| `../HYPERLIQUID_DATA/data/eth_mm/` | Shared crypto archive on the host; mounted at `/app/HL_data` in the shared collector |
+| `../HYPERLIQUID_DATA/data/hub/` | Canonical fast/slow books, BBO, trades, context, funding and metadata; mounted read-only at `/freqtrade/central-data` |
+| `../HYPERLIQUID_DATA/hub/hl_reader.py` | Shared reader; honors column selection so a top-of-book estimate does not expand all 20 levels |
+| `runtime/paper/params/` | Current estimates and historical parameter snapshots |
+| `runtime/paper/validation/` | Saved reports, replay ledgers and parameter schedules |
+| `runtime/paper/market-data/` | Frozen local archive used by older saved sweeps |
+| `../HYPERLIQUID_DATA/data/eth_mm/` | Frozen shared legacy archive; preserved in its original layout |
 
-On the current Windows workspace, the two capture roots are:
+`hl-collector` is stopped and behind the `legacy-archive` profile. Default startup
+runs only the bot and parameter service. Start the central hub first. Old data is
+retained; a different path does not imply another active collector. For new
+replays, use `--data-dir /freqtrade/central-data`. Reproducing an older saved sweep
+requires explicitly mounting and selecting its original historical input.
 
-```text
-%USERPROFILE%\Desktop\freqtrade\AVELLANEDA_MARKET_MAKING_FREQTRADE\runtime\paper\market-data
-%USERPROFILE%\Desktop\freqtrade\HYPERLIQUID_DATA\data\eth_mm
-```
-
-The paper archive contains parquet-shard directories such as `orderbooks_PAXG.parquet/`,
-`trades_PAXG.parquet/`, `prices_PAXG.parquet/`, `contexts_PAXG.parquet/` and
-`funding_PAXG.parquet/`, plus `market_PAXG/` metadata history and `health.json`.
-Use `--data-dir /freqtrade/market-data` in the paper parameter-service container,
-or pass the corresponding host path when selecting research inputs.
-
-The shared archive uses `<COIN>/orderbooks/`, `prices/`, `trades/` and `asset_ctx/`.
-Despite its `eth_mm` name, it includes PAXG and other coins. It is useful additional
-public history, but is not a drop-in replacement for the complete paper archive:
-asset-context layout differs, and settled funding, market metadata and parameter
-snapshots must also be accounted for when reproducing the current pipeline.
-
-Both collectors request Hyperliquid's **fast book stream** and retain each received
-snapshot. The observed feed supplies five levels per side; a storage setting of 20
-does not create deeper levels. A local probe measured approximately 0.55 seconds
-between fast snapshots versus 5.22 seconds for the default twenty-level stream.
-These measurements describe that probe, not a latency guarantee. Book/trade archives
-preserve exchange and receipt clocks; trade records include price, size, side and ID.
-Keep these raw archives and private research outputs local and gitignored.
+The hub keeps fast (up to five levels) and slow (up to twenty levels) books
+separate, retains both exchange and receipt clocks, and identifies trades by
+coin, exchange time and trade ID. Missing periods are not backfilled. Keep raw
+archives and private research outputs local and gitignored.
 
 ### Connection loss and PC restarts
 
-The collector reconnects and resubscribes after disconnects or stalled feeds. Connections use a ten-second socket timeout; retries back off from two to thirty seconds. Fresh observations and subscription acknowledgements are required after each reconnection. Failed parameter calculations retry after one minute; valid estimates retain the fifteen-minute schedule.
+The shared hub reconnects and resubscribes its separate fast and slow feeds after disconnects. Fresh observations and subscription acknowledgements are required after recovery. Failed parameter calculations retry after one minute; valid estimates retain the fifteen-minute schedule.
 
 Docker's `unless-stopped` policy restores the services when its engine restarts. On Windows, enable [Start Docker Desktop when you sign in](https://docs.docker.com/desktop/settings-and-maintenance/settings/); recovery then occurs after Windows sign-in, not before it. Containers deliberately stopped with `docker compose stop` remain stopped until started again.
 
-SQLite trades/orders, first-fill deadlines, trial start, peak equity and stop latches survive in `runtime/paper/state/`. Restarting does not grant a new risk budget or holding period. Graceful shutdown flushes capture buffers; an abrupt crash can lose the unpublished batch (normally up to five minutes). Incomplete temporary files are ignored, and missing intervals remain gaps subject to the coverage checks.
+SQLite trades/orders, first-fill deadlines, trial start, peak equity and stop latches survive in `runtime/paper/state/`. Restarting does not grant a new risk budget or holding period. The central hub normally fsyncs its WAL once per second; abrupt power loss can lose that uncommitted tail. Durable pending batches survive publication failures and restart. Missing intervals remain gaps subject to the coverage checks.
 
 ## Validation
 
@@ -265,7 +248,7 @@ For a chronological replay, replace the example dates with an interval having a 
 ```bash
 docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
   run --rm --no-deps --entrypoint python hl-params \
-  /freqtrade/scripts/evaluate.py PAXG --data-dir /freqtrade/market-data \
+  /freqtrade/scripts/evaluate.py PAXG --data-dir /freqtrade/central-data \
   --start 2026-10-03T00:00:00Z --end 2026-10-10T00:00:00Z \
   --output /freqtrade/params/evaluation
 ```

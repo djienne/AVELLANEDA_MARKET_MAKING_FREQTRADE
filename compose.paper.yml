@@ -17,7 +17,7 @@ services:
         limits:
           cpus: '0.1'
     volumes:
-      - ./runtime/paper/market-data:/freqtrade/market-data:ro
+      - ../HYPERLIQUID_DATA/data/hub:/freqtrade/central-data:ro
       - ./runtime/paper/params:/freqtrade/params
   hl-collector:
     deploy:

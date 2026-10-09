@@ -41,15 +41,18 @@ services:
       - ./HL_data_collector:/freqtrade/HL_data_collector:ro
       - ./user_data:/freqtrade/user_data:ro
       - ./scripts:/freqtrade/scripts:ro
-      - ./runtime/main/market-data:/freqtrade/market-data:ro
+      - ../HYPERLIQUID_DATA/data/hub:/freqtrade/central-data:ro
+      - ../HYPERLIQUID_DATA/hub:/opt/hl-reader:ro
       - ./runtime/main/params:/freqtrade/params
     environment:
-      HL_DATA_LOC: /freqtrade/market-data
+      HL_DATA_LOC: /freqtrade/central-data
+      PYTHONPATH: /opt/hl-reader
       AVELLANEDA_PARAMS_DIR: /freqtrade/params
       NUMBA_CACHE_DIR: /freqtrade/params/numba_cache
     entrypoint: ["python", "/freqtrade/scripts/calculate_avellaneda_parameters.py", "--loop"]
 
   hl-collector:
+    profiles: [legacy-archive]
     <<: *app
     volumes:
       - ./HL_data_collector:/freqtrade/HL_data_collector:ro
@@ -59,4 +62,11 @@ services:
       SYMBOLS: "PAXG,ETH"
       OUTPUT_DIR: /freqtrade/market-data
       ORDERBOOK_DEPTH: "5"
+      HL_PUBLIC_WS: ws://hyperliquid-data-hub:8766/ws?consumer=avellaneda
+    networks: [default, market-data]
     entrypoint: ["python", "/freqtrade/HL_data_collector/run_collector.py"]
+
+networks:
+  market-data:
+    external: true
+    name: hyperliquid-market-data

@@ -1,0 +1,11 @@
+# Apply after the central collector's acceptance gate. Old paper history stays on disk.
+services:
+  hl-params:
+    environment:
+      HL_DATA_LOC: /freqtrade/central-data
+      PYTHONPATH: /opt/hl-reader
+    volumes:
+      - ../HYPERLIQUID_DATA/data/hub:/freqtrade/central-data:ro
+      - ../HYPERLIQUID_DATA/hub:/opt/hl-reader:ro
+  hl-collector:
+    profiles: [legacy-collector]

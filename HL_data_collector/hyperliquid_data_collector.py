@@ -275,7 +275,7 @@ class HyperliquidDataCollector:
         try:
             while self.running:
                 attempt = time.monotonic()
-                self.ws = websocket.WebSocketApp("wss://api.hyperliquid.xyz/ws",
+                self.ws = websocket.WebSocketApp(os.getenv('HL_PUBLIC_WS', "wss://api.hyperliquid.xyz/ws"),
                     on_open=self._on_open, on_message=self._on_message,
                     on_error=lambda ws, error: log.warning("WebSocket: %s", error))
                 self.ws.run_forever(ping_interval=20, ping_timeout=10)

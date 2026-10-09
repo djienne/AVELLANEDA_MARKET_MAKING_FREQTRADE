@@ -109,8 +109,16 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
         p["reasons"].append("Collector health unavailable")
     elif live:
         health = json.loads(health_file.read_text())
-        age = (pd.Timestamp.now(tz="UTC") - utc(health["timestamp"])).total_seconds()
-        if not -1 <= age <= 30 or not health.get("symbols", {}).get(ticker, {}).get("healthy"):
+        if health.get('schema_version') == 1:
+            age = (pd.Timestamp.now(tz="UTC").value - health['timestamp_ns']) / 1e9
+            streams = health.get('instruments', {}).get(ticker, {})
+            healthy = (health['storage']['healthy'] and not health.get('metadata_error') and
+                       streams.get('l2_fast', {}).get('fresh') and
+                       streams.get('activeAssetCtx', {}).get('fresh'))
+        else:
+            age = (pd.Timestamp.now(tz="UTC") - utc(health["timestamp"])).total_seconds()
+            healthy = health.get("symbols", {}).get(ticker, {}).get("healthy")
+        if not -1 <= age <= 30 or not healthy:
             p["reasons"].append("Collector is not healthy")
     p["data_valid"] = not p["reasons"]
     if p["data_valid"]:

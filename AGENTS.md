@@ -4,8 +4,8 @@
 
 - `scripts/` contains the estimator, shared quote policy, public-data replay, evaluator and runnable scientific checks.
 - `user_data/config.json` configures one Hyperliquid pair; `user_data/strategies/avellaneda.py` implements the paper-only Freqtrade callbacks. The calculator defaults to that configured pair unless a ticker is supplied.
-- `HL_data_collector/run_collector.py` captures public streams. The collector, calculator and bot share the image built by `Dockerfile.technical`.
-- The active paper collector writes `runtime/paper/market-data/`; this is the input used by the parameter service and saved sweeps. A separate shared collector writes `../HYPERLIQUID_DATA/data/eth_mm/`, with source in `../Cartea-Jaimungal_MARKET_MAKING_FREQTRADE/scripts/`. See [collector and data locations](README.md#collectors-and-data-locations) before choosing a backtest archive.
+- Public capture is owned by `../HYPERLIQUID_DATA/hub/`. The parameter service mounts `../HYPERLIQUID_DATA/data/hub/` read-only at `/freqtrade/central-data`; its `HL_DATA_LOC` and shared Python reader are configured in Compose.
+- Since 2026-10-09 the local `hl-collector` is stopped behind `legacy-archive`. `runtime/paper/market-data/` and the sibling `data/eth_mm/` are frozen historical sources, including the inputs to older saved sweeps. Do not restart duplicate writers. See [collector and data locations](README.md#collectors-and-data-locations).
 - `docker-compose.yml` defines the three services. The isolated experiment uses `compose.paper.yml` and project name `avellaneda-paper`; follow the build/start commands in [README.md](README.md#start).
 - Paper files live under gitignored `runtime/paper/`: `market-data/`, `params/` and `state/`. The latter holds `trades.sqlite`, `trial.json` and `freqtrade.log`. Default Compose paths use `runtime/main/`.
 - Credentials come from gitignored `.env`. The calculator publishes every fifteen minutes when valid and retries failed calculations after one minute.
