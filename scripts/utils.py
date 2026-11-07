@@ -62,6 +62,21 @@ def _intersects(pf, start, end):
     return False
 
 
+def _epoch(values, unit):
+    """Epoch numbers to UTC times; missing or out-of-range values become NaT.
+
+    Only finite, datetime64[ns]-representable values reach pandas' unit cast: it
+    rounds NaN slots from uninitialised memory under errstate(over="raise"), which
+    intermittently raised FloatingPointError on the hub's null context clocks.
+    """
+    numbers = pd.to_numeric(values, errors="coerce").astype(float)
+    good = np.isfinite(numbers) & (numbers.abs() < 9e18 / {"s": 1e9, "ms": 1e6}[unit])
+    out = pd.Series(pd.NaT, index=values.index, dtype="datetime64[ns, UTC]")
+    if good.any():
+        out[good] = pd.to_datetime(numbers[good], unit=unit, utc=True)
+    return out
+
+
 def safe_read_parquet(path, start=None, end=None, columns=None):
     path = Path(path)
     start, end = (utc(start) if start is not None else None), (utc(end) if end is not None else None)
@@ -92,11 +107,8 @@ def safe_read_parquet(path, start=None, end=None, columns=None):
         df = df.reset_index()
     if "timestamp" not in df:
         raise ValueError("Missing local receipt timestamp")
-    received = pd.to_datetime(df["timestamp"], unit="s", utc=True, errors="coerce")
-    event = pd.to_datetime(pd.to_numeric(df.get("exchange_timestamp"), errors="coerce"),
-                           unit="ms", utc=True, errors="coerce")
-    if not isinstance(event, pd.Series):
-        event = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns, UTC]")
+    received = _epoch(df["timestamp"], "s")
+    event = _epoch(df.get("exchange_timestamp", pd.Series(np.nan, index=df.index)), "ms")
     df["clock_valid"] = event.notna() & received.notna() & ((event - received).dt.total_seconds() <= 1)
     df["event_time"] = event.fillna(received)
     df["received_at"] = received

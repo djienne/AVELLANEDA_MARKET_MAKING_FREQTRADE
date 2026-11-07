@@ -18,7 +18,7 @@ from backtest import prepare_replay_events, replay, visible_queue
 from hyperliquid_data_collector import HyperliquidDataCollector
 from intensity import fit_maxima, window_depths
 from quote_model import _solve_quotes, next_unlock, quote_decision, update_trial, validate_params, warm_quote_kernel
-from utils import atomic_json, load_funding_data, load_market_metadata, load_trades_data
+from utils import atomic_json, load_funding_data, load_market_metadata, load_trades_data, safe_read_parquet
 from volatility import forecast_variance
 
 
@@ -104,6 +104,18 @@ class Checks(unittest.TestCase):
         self.assertAlmostEqual(out["observable_pnl"] + out["gap_affected_pnl"], out["net_pnl"])
         self.assertGreaterEqual(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=40)).timestamp())
         self.assertLess(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=60)).timestamp())
+
+    def test_null_and_absurd_exchange_clocks_load_as_invalid(self):
+        # Hub context rows carry no exchange time; NaN/absurd values must never reach
+        # pandas' unit cast (it rounds unset NaN slots under errstate(over="raise")).
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "contexts.parquet"
+            pd.DataFrame({"timestamp": [1.7e9, 1.7e9 + 1, 1.7e9 + 2],
+                          "exchange_timestamp": [None, 1e305, 1.7e12 + 2000],
+                          "funding_rate": [0., 0., 0.]}).to_parquet(path)
+            df = safe_read_parquet(path)
+        self.assertEqual(df.clock_valid.tolist(), [False, False, True])
+        self.assertEqual(df.event_time.iloc[0], pd.Timestamp(1.7e9, unit="s", tz="UTC"))
 
     def test_receipt_stall_with_complete_exchange_data_stays_observable(self):
         start = pd.Timestamp("2026-10-01T12:01:00Z")
