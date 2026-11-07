@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "scripts"), str(ROOT / "user_data/strategies"), str(ROOT / "HL_data_collector")]
 from backtest import prepare_replay_events, replay, visible_queue
 from hyperliquid_data_collector import HyperliquidDataCollector
-from intensity import fit_maxima, window_depths
+from intensity import fill_markout, fit_maxima, window_depths
 from quote_model import _solve_quotes, next_unlock, quote_decision, update_trial, validate_params, warm_quote_kernel
 from utils import atomic_json, load_funding_data, load_market_metadata, load_trades_data, safe_read_parquet
 from volatility import forecast_variance
@@ -37,7 +37,9 @@ def parameters(now):
             "volatility": {"sample_seconds": 5, "origin": (now - pd.Timedelta(seconds=10)).isoformat(),
                            "cumulative_log_variance": (np.arange(721) * 1e-8).tolist()},
             "intensity": {s: {"A": .1, "k": 10., "min_delta": .1, "max_delta": .8,
-                             "windows": 2000, "crossings": 100, "quantity": .5} for s in ("bid", "ask")}}
+                             "windows": 2000, "crossings": 100, "quantity": .5,
+                             "markout": {"delta": [.001, 10.], "value": [0., 0.], "horizon_seconds": 15}}
+                          for s in ("bid", "ask")}}
 
 
 def live_book(now, mid=100.):
@@ -158,6 +160,13 @@ class Checks(unittest.TestCase):
             bad[key] = value
             with self.subTest(key=key), self.assertRaises((ValueError, KeyError, TypeError)):
                 validate_params(bad, p["pair"], now)
+        # The markout must cover every quotable distance and be finite.
+        for markout in ({"delta": [.2, 10.], "value": [0., 0.]}, {"delta": [.001, .5], "value": [0., 0.]},
+                        {"delta": [.001, 10.], "value": [0., float("nan")]}):
+            bad = copy.deepcopy(p)
+            bad["intensity"]["ask"]["markout"] = markout
+            with self.subTest(markout=markout), self.assertRaises(ValueError):
+                validate_params(bad, p["pair"], now)
 
     def test_sigma_known_truth_and_no_future(self):
         rng = np.random.default_rng(3)
@@ -216,6 +225,34 @@ class Checks(unittest.TestCase):
         expected = probability * (.5 * .1 - .5 * .01)
         self.assertEqual(out["action"], "buy")
         self.assertAlmostEqual(out["value"], expected, places=9)
+
+    def test_markout_known_truth_and_break_even(self):
+        # Crossings run through the quote: depth D ~ Exp(mean .2) and the mid follows, so
+        # E[move | D > d] = -(d + .2) for bids (memoryless). Asks see the mirror image.
+        rng = np.random.default_rng(7)
+        depths = np.where(rng.uniform(size=20000) < .3, rng.exponential(.2, 20000), 0.)
+        moves = -depths + rng.normal(0, .05, 20000)
+        grid = [.1, .3, .5]
+        bid = fill_markout(depths, moves, grid, 1)
+        np.testing.assert_allclose(bid["value"], [-(d + .2) for d in grid], atol=.04)
+        self.assertEqual(fill_markout(depths, -moves, grid, -1)["value"], bid["value"])
+        unseen = fill_markout(depths, np.where(depths > .45, np.nan, moves), grid, 1)
+        self.assertEqual(unseen["delta"], [.1, .3])  # Unobserved deep moves stay unsupported.
+        # One step, no fees or risk: buy iff q*(delta + m) beats the half-spread liquidation cost.
+        now = pd.Timestamp("2026-10-01T12:01:00Z")
+        probability = -np.expm1(-.1 * np.exp(-10 * .1) * 15)
+        for drift in (.05, .085, .095):
+            with self.subTest(drift=drift):
+                p, b = parameters(now), live_book(now)
+                p["volatility"]["cumulative_log_variance"] = [0.] * 721
+                p["market"]["maker_fee"] = p["market"]["taker_fee"] = 0.
+                for side in p["intensity"].values():
+                    side["max_delta"] = side["min_delta"] = .1
+                p["intensity"]["bid"]["markout"]["value"] = [-drift, -drift]
+                out = quote_decision(p, b, now, planning_seconds=15)
+                gain = probability * (.5 * (.1 - drift) - .5 * .01)
+                self.assertEqual(out["action"], "buy" if gain > 0 else "wait")
+                self.assertAlmostEqual(out["value"], max(gain, 0.), places=9)
 
     def test_unit_scaling_and_deadline(self):
         now = pd.Timestamp.now(tz="UTC")

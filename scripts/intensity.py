@@ -51,6 +51,8 @@ def window_depths(book, trades, start, end, quantity, seconds=15):
         uncertain = bad.index.floor(f"{seconds}s").union(pd.DatetimeIndex(bad.received_at).floor(f"{seconds}s"))
         accepted = accepted[~accepted.isin(uncertain)]
     output = pd.DataFrame({"mid": refs.reindex(accepted), "bid_depth": 0., "ask_depth": 0.}, index=accepted)
+    # Mid change to the next decision; NaN when that mid is unobserved.
+    output["move"] = mids.reindex(accepted + pd.Timedelta(seconds=seconds)).to_numpy() - output.mid.to_numpy()
     in_window = trades[(trades.index >= start) & (trades.index < end) & trades.clock_valid]
     for (at, side), group in in_window.groupby([in_window.index.floor(f"{seconds}s"), "side"]):
         if at not in output.index:
@@ -65,6 +67,29 @@ def window_depths(book, trades, start, end, quantity, seconds=15):
     output.attrs["coverage"] = len(accepted) / max(len(times), 1)
     output.attrs["quantity"] = quantity
     return output
+
+
+def fill_markout(depths, moves, delta, sign, min_fills=20):
+    """m(d) = sign * E[mid(t+15 s) - mid(t) | full-quantity crossing deeper than d].
+
+    The frozen-mid fill value omits this post-fill move; negative means adverse selection.
+    sign=+1 for bids (long after the fill), -1 for asks (the martingale no-fill branch
+    carries the opposite move). Distances with fewer than min_fills observed moves are
+    unsupported; the grid stops there. Plain conditional means, no smoothing: noisy deep
+    buckets are capped only by the 20-fill rule and judged on chronological holdout.
+    """
+    depths, moves = np.asarray(depths, float), np.asarray(moves, float)
+    seen = np.isfinite(moves)
+    grid, values = [], []
+    for d in np.unique(delta):
+        hit = seen & (depths > d)
+        if hit.sum() < min_fills:
+            break
+        grid.append(float(d))
+        values.append(sign * float(moves[hit].mean()))
+    if not grid:
+        raise ValueError("No supported markout distance")
+    return {"delta": grid, "value": values, "horizon_seconds": 15}
 
 
 def estimate_intensity(depths, tick, seconds=15, min_windows=1000, min_events=30, bootstrap=32):

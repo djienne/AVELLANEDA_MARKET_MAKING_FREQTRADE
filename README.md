@@ -109,6 +109,17 @@ $$
 
 An interval-censored likelihood counts each window once. Bid and ask fits are separate. Quotes are restricted to the empirically supported distance range; the outer boundary needs at least 20 supporting crossings. Optional uncertainty estimates use circular blocks of 120 accepted windows: nominally 30 minutes, longer when capture gaps have been excluded. The offline evaluator skips this intensity bootstrap during its repeated fits.
 
+### Post-fill markout
+
+The same windows measure adverse selection. For each calibration distance, the markout is the mean mid change from the window start to the next decision, over the windows whose crossing went deeper than that distance:
+
+$$
+m_{\mathrm{bid}}(\delta)=E\!\left[S_{t+15\,\mathrm{s}}-S_t \mid D_{\mathrm{bid}}>\delta\right],\qquad
+m_{\mathrm{ask}}(\delta)=-E\!\left[S_{t+15\,\mathrm{s}}-S_t \mid D_{\mathrm{ask}}>\delta\right].
+$$
+
+A fill is valued as $q(\delta+m(\delta))-f_m q P$ instead of $q\delta-f_m q P$, with linear interpolation between distances. For asks, a zero unconditional drift lets the no-fill branch keep the frozen mid. A distance with fewer than 20 observed moves is unsupported and caps the quote range. On PAXG (2026-11-07) $m$ was −0.12 to −0.36 USDC at 0.1–0.5 USDC, so every fill lost 1.0–1.7 bp after the 0.61 USDC-per-unit maker fee. That range already blocks entries on fees alone; the markout widens the loss and pulls exit asks toward the mid, where fills are less adversely selected. This public-crossing proxy excludes fills at exactly our price, and replayed queue fills showed larger adverse moves.
+
 This estimates a **full-quantity public crossing proxy**. It does not estimate an authenticated order's queue position.
 
 ### Entry requirements
@@ -322,7 +333,7 @@ The normal evidence gate requires seven complete out-of-sample days, 100 complet
 - Public-trade replay and Freqtrade dry-run have different fill mechanisms. Neither validates live queue position.
 - Five-level snapshots cannot reveal exact FIFO priority. Order latency is fixed, fill acknowledgements are immediate, and the replay does not reproduce every Freqtrade entry-veto/timeout path. Queue estimates require calibration against actual executions before relying on small parameter differences.
 - The binary full-fill arrival model approximates a market with partial execution; the ledger still accounts for actual simulated partial quantities.
-- A finite, fixed reference price within the control calculation omits predictive drift and explicit adverse-selection dynamics. Post-fill markouts are recorded to test that assumption.
+- A finite, fixed reference price within the control calculation omits predictive drift. Adverse selection enters only as the measured 15-second markout per fill; later continuation is assumed to be zero. Replay records 1–60 s markouts to test that assumption.
 - Funding marks use the observed mark when available, otherwise the contemporaneous book midpoint as a valuation proxy.
 - Quote search is capped at 512 tick candidates for unusually wide fitted ranges.
 - Synthetic agreement, a healthy process or a short positive run does not establish a trading edge.

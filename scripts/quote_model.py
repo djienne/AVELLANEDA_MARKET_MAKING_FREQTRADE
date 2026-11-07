@@ -80,6 +80,11 @@ def validate_params(p, pair, now, gap_aware=False):
             raise ValueError("Unsupported intensity fit")
         if model["quantity"] != p["quantity"]:
             raise ValueError("Intensity calibration quantity mismatch")
+        grid, values = (np.asarray(model["markout"][k], float) for k in ("delta", "value"))
+        if (grid.ndim != 1 or grid.shape != values.shape or not len(grid) or not np.isfinite(grid).all()
+                or not np.isfinite(values).all() or np.any(np.diff(grid) <= 0)
+                or grid[0] > model["min_delta"] + 1e-12 or grid[-1] < model["max_delta"] - 1e-12):
+            raise ValueError("Markout must cover the supported quote distances")
     if p["trade_enabled"] and p.get("evidence", {}).get("status") != "passed":
         raise ValueError("Evidence gate mismatch")
     return p
@@ -200,6 +205,7 @@ def quote_decision(p, book, now, quantity=0., remaining_seconds=HORIZON, stake=S
 
     Reference mid and arrival coefficients are frozen over this receding horizon. The
     variance term evolves. Fill probabilities are a public-data proxy, not a queue model.
+    Each fill adds its measured 15-s markout m(delta), so adverse selection is priced.
     """
     mid = validate_book(book, now)
     market = p["market"]
@@ -232,9 +238,13 @@ def quote_decision(p, book, now, quantity=0., remaining_seconds=HORIZON, stake=S
     base = utc(now).timestamp()
     remaining_steps = max(0, int(math.ceil(remaining_seconds / STEP)))
     funding_rate = float(p.get("funding_rate", 0))
-    bid_proceeds = target * (mid - bid) - fm * target * bid
+    # Fill value marked at the next decision's mid: spread plus the measured post-fill move.
+    def markout(prices, side):
+        m = p["intensity"][side]["markout"]
+        return np.interp(abs(prices - mid), m["delta"], m["value"])
+    bid_proceeds = target * (mid - bid + markout(bid, "bid")) - fm * target * bid
     q = quantities[:, None]
-    ask_proceeds = q * (ask - mid) - fm * q * ask
+    ask_proceeds = q * (ask - mid + markout(ask, "ask")) - fm * q * ask
     pick, value = _solve_quotes(bid_proceeds, ask_proceeds, pb, ob, pa, oa, variance,
                                 quantities, np.asarray(costs), float(p["gamma_usdc"]), mid,
                                 funding_rate, base, remaining_steps, STEP, 900)

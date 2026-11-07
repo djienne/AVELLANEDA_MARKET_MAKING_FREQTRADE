@@ -9,7 +9,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from intensity import estimate_intensity, window_depths
+from intensity import estimate_intensity, fill_markout, window_depths
 from quote_model import GAMMA_USDC, MIN_COVERAGE, STAKE, validate_params
 from utils import atomic_json, get_tick_size, load_book_data, load_market_metadata, load_trades_data, mid_grid, safe_read_parquet, stream_path, utc
 from volatility import forecast_variance
@@ -91,9 +91,12 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None, gap_
         p["reasons"].append("Need six hours of complete observed quote windows")
     tick = get_tick_size(reference, market["sz_decimals"])
     p["intensity"] = {}
-    for side in ("bid", "ask"):
+    for side, sign in (("bid", 1), ("ask", -1)):
         model = estimate_intensity(windows[f"{side}_depth"], tick, bootstrap=bootstrap)
         model["quantity"] = quantity
+        model["markout"] = fill_markout(windows[f"{side}_depth"], windows.move, model["calibration"]["delta"], sign)
+        # Quote only where both the fill probability and the post-fill move are supported.
+        model["max_delta"] = min(model["max_delta"], model["markout"]["delta"][-1])
         p["intensity"][side] = model
     context = (safe_read_parquet(stream_path(data_root, ticker, "contexts"), asof - pd.Timedelta(minutes=10), asof)
                if observations is None else cut(observations["contexts"], asof - pd.Timedelta(minutes=10), asof))
