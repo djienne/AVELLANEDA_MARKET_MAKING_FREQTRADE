@@ -244,8 +244,8 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
             physical = item
             update_queue()
         elif kind == "received_book":
-            if received is not None and at - received["received_at"] > 2:
-                capture_gap(at, "Receipt gap during order/inventory exposure")
+            # A late receipt is our latency, not missing data: exchange-time books/trades still
+            # determine fills, and decide() already refuses to act on a stale received book.
             received = item
         elif kind == "uncertain_clock":
             uncertain_until = max(uncertain_until, item)

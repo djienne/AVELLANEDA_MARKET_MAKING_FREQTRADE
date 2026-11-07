@@ -105,6 +105,22 @@ class Checks(unittest.TestCase):
         self.assertGreaterEqual(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=40)).timestamp())
         self.assertLess(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=60)).timestamp())
 
+    def test_receipt_stall_with_complete_exchange_data_stays_observable(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 1140)
+        stall = (book.index >= start + pd.Timedelta(seconds=400)) & (book.index < start + pd.Timedelta(seconds=405))
+        late = start + pd.Timedelta(seconds=405.5)  # Hub delivers five exchange-time books in one late burst.
+        book.loc[stall, ["received_at", "available_at"]] = late
+        trades = pd.DataFrame({"side": ["sell", "buy"], "price": [99.8, 100.1], "size": [.5, .5]},
+                              index=[start + pd.Timedelta(seconds=s) for s in (3, 918)])
+        def policy(p, b, now, q, remaining):
+            return {"action": "sell" if q else "buy", "price": 100.01 if q else 99.9, "quantity": .5}
+        p = dict(parameters(start), observed_price_seconds=21600, observed_exposure_seconds=21600)
+        out = replay(book, trades, [p], start, start + pd.Timedelta(seconds=1140), policy=policy, gap_aware=True)
+        self.assertEqual(out["capture_uncertainties"], [])
+        self.assertEqual(out["gap_affected_round_trips"], 0)
+        self.assertEqual([c["observable"] for c in out["cycles"]], [True])
+
     def test_flat_cash_survives_terminal_gap(self):
         start = pd.Timestamp("2026-10-01T12:01:00Z")
         book = recorded(start, 10)
