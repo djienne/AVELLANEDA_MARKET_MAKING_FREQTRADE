@@ -255,6 +255,17 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
 
 The evaluator refits using preceding observations, liquidates at daily boundaries, and reports base/zero/five-second latency cases, higher fees, all-taker costs, a fixed-quote baseline and no trading. Each day resets inventory and simulated risk state; the paper run tracks the continuous seven-day budget. The evaluator saves JSON ledgers, an evidence summary and a diagnostic figure.
 
+Offline studies can opt into `gap_aware=True` in the shared estimator and replay.
+Calibration then uses complete observed windows, requiring six observed hours;
+missing prices never create returns or zero-crossing observations. Replay pauses
+entries on stale data or rejected clocks, cancels through the normal latency path,
+and liquidates affected inventory when fresh books return. It retains subsequent
+complete cycles while labeling exposed gaps and missing funding as uncertain.
+`observable_pnl` describes those observed cycles, not an unbiased continuous-account
+return: missing fills can change inventory, and missingness may depend on activity.
+Full-run validity remains false when exposure was uncertain. The running paper
+estimator and strategy retain their default 90% coverage gate.
+
 The quote recursion uses one Numba kernel shared by the bot and replay, with strict
 floating-point arithmetic (`fastmath=False`) and no parallel execution. Validation,
 timestamps and accounting remain in Python. Replay prepares column arrays and static

@@ -18,7 +18,7 @@ from backtest import prepare_replay_events, replay, visible_queue
 from hyperliquid_data_collector import HyperliquidDataCollector
 from intensity import fit_maxima, window_depths
 from quote_model import _solve_quotes, next_unlock, quote_decision, update_trial, validate_params, warm_quote_kernel
-from utils import atomic_json, load_funding_data, load_trades_data
+from utils import atomic_json, load_funding_data, load_market_metadata, load_trades_data
 from volatility import forecast_variance
 
 
@@ -58,6 +58,64 @@ def recorded(start, seconds=60, final_mid=100.):
 
 
 class Checks(unittest.TestCase):
+    def test_central_metadata_uses_only_received_history(self):
+        now = pd.Timestamp("2026-10-04T12:00:00Z")
+        old, recent, future = [parameters(now)["market"] for _ in range(3)]
+        old = dict(old, timestamp=(now - pd.Timedelta(days=3)).isoformat())
+        recent = dict(recent, timestamp=(now - pd.Timedelta(minutes=30)).isoformat())
+        future = dict(future, timestamp=(now - pd.Timedelta(minutes=10)).isoformat(), maker_fee=.001)
+        rows = [{'received_ns': (now - pd.Timedelta(minutes=30)).value,
+                 'payload': json.dumps({'data': recent})},
+                {'received_ns': (now + pd.Timedelta(minutes=1)).value,
+                 'payload': json.dumps({'data': future})}]
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / 'events').mkdir()
+            atomic_json(Path(td) / 'market_PAXG.json', old)
+            reader = SimpleNamespace(events=lambda *args: iter(rows))
+            with patch.dict(sys.modules, {'hl_reader': reader}):
+                self.assertEqual(load_market_metadata(td, 'PAXG', now), recent)
+
+    def test_gap_aware_research_keeps_observable_cycles(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 1140)
+        book = book[(book.index < start + pd.Timedelta(seconds=10)) |
+                    (book.index >= start + pd.Timedelta(seconds=40))]
+        trades = pd.DataFrame({"side": ["sell", "sell", "buy"], "price": [99.8, 99.8, 100.1],
+                               "size": [.5, .5, .5]},
+                              index=[start + pd.Timedelta(seconds=s) for s in (3, 903, 918)])
+        p = parameters(start)
+        p.update(coverage=.75, observed_price_seconds=21600, observed_exposure_seconds=21600)
+        with self.assertRaises(ValueError):
+            validate_params(p, p["pair"], start)
+        validate_params(p, p["pair"], start, gap_aware=True)
+        with self.assertRaisesRegex(ValueError, "explicit opt-in"):
+            validate_params(dict(p, coverage=1., research_observed_windows=True), p["pair"], start)
+        def policy(p, b, now, q, remaining):
+            elapsed = (now - start).total_seconds()
+            action = "sell" if q else ("buy" if elapsed < 10 or elapsed >= 900 else "wait")
+            return {"action": action, "price": 100.01 if q else 99.9, "quantity": .5}
+        out = replay(book, trades, [p], start, start + pd.Timedelta(seconds=1140),
+                     policy=policy, gap_aware=True)
+        self.assertFalse(out["valid"])  # Unknown exposure still cannot certify full-account PnL.
+        self.assertEqual([c["observable"] for c in out["cycles"]], [False, True])
+        self.assertEqual(out["observable_round_trips"], 1)
+        self.assertEqual(out["gap_affected_round_trips"], 1)
+        self.assertAlmostEqual(out["observable_pnl"], out["cycles"][1]["pnl"])
+        self.assertAlmostEqual(out["observable_pnl"] + out["gap_affected_pnl"], out["net_pnl"])
+        self.assertGreaterEqual(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=40)).timestamp())
+        self.assertLess(out["cycles"][0]["exit_time"], (start + pd.Timedelta(seconds=60)).timestamp())
+
+    def test_flat_cash_survives_terminal_gap(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 10)
+        book = book[book.index >= start + pd.Timedelta(seconds=5)]
+        trades = pd.DataFrame(columns=["side", "price", "size"], index=pd.DatetimeIndex([], tz="UTC"))
+        def wait(p, b, now, q, remaining):
+            return {"action": "wait", "price": None, "quantity": 0.}
+        out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60), policy=wait)
+        self.assertTrue(out["valid"], out["errors"])
+        self.assertEqual(out["net_pnl"], 0.)
+
     def test_parameter_boundary(self):
         now = pd.Timestamp.now(tz="UTC")
         p = parameters(now)

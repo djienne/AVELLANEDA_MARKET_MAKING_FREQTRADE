@@ -25,7 +25,7 @@ def number(value, name, minimum=0, strict=False):
     return float(value)
 
 
-def validate_params(p, pair, now):
+def validate_params(p, pair, now, gap_aware=False):
     if not isinstance(p, dict) or p.get("pair") != pair:
         raise ValueError("Wrong parameter market")
     for key in ("data_valid", "trade_enabled"):
@@ -33,6 +33,8 @@ def validate_params(p, pair, now):
             raise ValueError(f"{key} must be boolean")
     if not p["data_valid"]:
         raise ValueError("; ".join(p.get("reasons", ["Data/model invalid"])))
+    if p.get("research_observed_windows") and not gap_aware:
+        raise ValueError("Gap-aware research parameters require explicit opt-in")
     now = utc(now)
     start, end, calculated, expires = (utc(p[k]) for k in ("data_start", "data_end", "timestamp", "expires_at"))
     trades_end = utc(p["trade_data_end"])
@@ -42,8 +44,12 @@ def validate_params(p, pair, now):
         raise ValueError("Invalid trade chronology")
     if now > expires or expires > min(end, trades_end) + pd.Timedelta(minutes=30) or expires <= calculated:
         raise ValueError("Expired parameters")
-    if (end - start).total_seconds() < 6 * 3600 or number(p["coverage"], "coverage") < MIN_COVERAGE:
+    coverage = number(p["coverage"], "coverage")
+    if coverage > 1 or (end - start).total_seconds() < 6 * 3600 or (not gap_aware and coverage < MIN_COVERAGE):
         raise ValueError("Insufficient data coverage")
+    if gap_aware and any(number(p[k], k) < 6 * 3600 for k in
+                         ("observed_price_seconds", "observed_exposure_seconds")):
+        raise ValueError("Need six observed hours for gap-aware research")
     market = p["market"]
     if market["symbol"] != pair or type(market["sz_decimals"]) is not int or not 0 <= market["sz_decimals"] <= 6:
         raise ValueError("Invalid market precision")

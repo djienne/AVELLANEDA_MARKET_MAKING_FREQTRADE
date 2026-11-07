@@ -11,7 +11,7 @@ import pandas as pd
 
 from intensity import estimate_intensity, window_depths
 from quote_model import GAMMA_USDC, MIN_COVERAGE, STAKE, validate_params
-from utils import atomic_json, get_tick_size, load_book_data, load_trades_data, mid_grid, safe_read_parquet, stream_path, utc
+from utils import atomic_json, get_tick_size, load_book_data, load_market_metadata, load_trades_data, mid_grid, safe_read_parquet, stream_path, utc
 from volatility import forecast_variance
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,13 +24,15 @@ def model_digest():
     return digest.hexdigest()
 
 
-def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
+def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None, gap_aware=False):
+    """Research may fit observed windows across gaps; the live 90% gate stays default."""
     live = asof is None
     asof = utc(asof) if asof is not None else pd.Timestamp.now(tz="UTC")
     pair = f"{ticker}/USDC:USDC"
     start = asof - pd.Timedelta(hours=24)
     p = {"pair": pair, "timestamp": asof.isoformat(), "data_valid": False, "trade_enabled": False,
          "reasons": [], "gamma_usdc": GAMMA_USDC, "model_digest": model_digest(),
+         "research_observed_windows": gap_aware,
          "evidence": {"status": "inconclusive", "reason": "No accepted chronological evaluation"}}
     def cut(frame, beginning, cutoff):
         dates = frame.index if isinstance(frame.index, pd.DatetimeIndex) else frame.event_time
@@ -54,19 +56,12 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
     grid_start, grid_end = data_start.ceil("5s"), data_end.floor("5s")
     mid = mid_grid(book, grid_start, grid_end)
     p["coverage"] = float(mid.notna().mean()) if len(mid) else 0.
-    if p["coverage"] < MIN_COVERAGE:
+    p["observed_price_seconds"] = int(mid.notna().sum()) * 5
+    if not gap_aware and p["coverage"] < MIN_COVERAGE:
         p["reasons"].append(f"Book coverage below {MIN_COVERAGE:.0%}")
-    candidates = list((Path(data_root) / f"market_{ticker}").glob("*.json"))
-    candidates.append(Path(data_root) / f"market_{ticker}.json")
-    known = []
-    for path in candidates:
-        if path.exists():
-            item = json.loads(path.read_text())
-            if utc(item["timestamp"]) <= asof:
-                known.append(item)
-    if not known:
-        raise ValueError("No market metadata known at the requested cutoff")
-    market = max(known, key=lambda m: m["timestamp"])
+    if gap_aware and p["observed_price_seconds"] < 6 * 3600:
+        p["reasons"].append("Need six hours of observed prices")
+    market = load_market_metadata(data_root, ticker, asof)
     p["market"] = market
     reference = float(book.mid_price.iloc[-1])
     p["reference_mid"] = reference
@@ -89,8 +84,11 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
         p["reasons"].append("Trade capture is more than ten minutes old")
     windows = window_depths(book, trades, data_start, data_end, quantity)
     p["intensity_coverage"] = float(windows.attrs["coverage"])
-    if p["intensity_coverage"] < MIN_COVERAGE:
+    p["observed_exposure_seconds"] = len(windows) * 15
+    if not gap_aware and p["intensity_coverage"] < MIN_COVERAGE:
         p["reasons"].append(f"Quote exposure coverage below {MIN_COVERAGE:.0%}")
+    if gap_aware and p["observed_exposure_seconds"] < 6 * 3600:
+        p["reasons"].append("Need six hours of complete observed quote windows")
     tick = get_tick_size(reference, market["sz_decimals"])
     p["intensity"] = {}
     for side in ("bid", "ask"):
@@ -122,7 +120,7 @@ def estimate(ticker, data_root, asof=None, bootstrap=32, observations=None):
             p["reasons"].append("Collector is not healthy")
     p["data_valid"] = not p["reasons"]
     if p["data_valid"]:
-        validate_params(p, pair, asof)
+        validate_params(p, pair, asof, gap_aware=gap_aware)
     return p
 
 

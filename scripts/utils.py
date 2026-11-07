@@ -117,6 +117,29 @@ def stream_path(root, ticker, kind):
     return native if native.exists() else root / ticker / kind
 
 
+def load_market_metadata(root, ticker, asof):
+    """Definitions change rarely; canonical hourly receipts establish freshness."""
+    root, asof = Path(root), utc(asof)
+    known = []
+    if (root / 'events').is_dir():
+        from hl_reader import events
+        for row in events(root, ticker, 'metadata', (asof - pd.Timedelta(days=1)).timestamp() * 1000,
+                          asof.timestamp() * 1000):
+            if row['received_ns'] <= asof.value:
+                item = json.loads(row['payload'])['data']
+                if utc(item['timestamp']) <= asof:
+                    known.append(item)
+    paths = list((root / f'market_{ticker}').glob('*.json')) + [root / f'market_{ticker}.json']
+    for path in paths:
+        if path.exists():
+            item = json.loads(path.read_text())
+            if utc(item['timestamp']) <= asof:
+                known.append(item)
+    if not known:
+        raise ValueError('No market metadata known at the requested cutoff')
+    return max(known, key=lambda item: utc(item['timestamp']))
+
+
 def load_trades_data(path, start=None, end=None):
     df = safe_read_parquet(path, start, end)
     required = {"price", "size", "side", "trade_id"}

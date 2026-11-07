@@ -20,7 +20,7 @@ def visible_queue(book, side, price):
     return None
 
 
-def prepare_replay_events(book, trades, parameters, start, end, funding=None):
+def prepare_replay_events(book, trades, parameters, start, end, funding=None, gap_aware=False):
     """Return (start, end, event heap) for reuse with the same immutable inputs/interval."""
     start, end = utc(start), utc(end)
     if end <= start:
@@ -35,6 +35,10 @@ def prepare_replay_events(book, trades, parameters, start, end, funding=None):
             events.append((float(at), int(kind != "trade"), len(events), kind, value))
 
     rows = book[(book.index >= start - pd.Timedelta(seconds=2)) & (book.index <= end)]
+    if gap_aware:
+        for at in rows.loc[~rows.clock_valid, "received_at"]:
+            push(at.timestamp(), "uncertain_clock", at.timestamp() + 15)
+        rows = rows[rows.clock_valid]
     depths = []
     for side in ("bid", "ask"):
         columns = []
@@ -53,6 +57,10 @@ def prepare_replay_events(book, trades, parameters, start, end, funding=None):
         push(max(at.timestamp(), beginning), "book", snapshot)
         push(max(available.timestamp(), beginning), "received_book", snapshot)
     rows = trades[(trades.index >= start) & (trades.index <= end)]
+    if gap_aware and "clock_valid" in rows:
+        for at in rows.loc[~rows.clock_valid, "received_at"]:
+            push(at.timestamp(), "uncertain_clock", at.timestamp() + 15)
+        rows = rows[rows.clock_valid]
     if not rows.empty:
         for at, side, price, size in zip(rows.index, rows.side.to_numpy(), rows.price.to_numpy(), rows["size"].to_numpy()):
             push(at.timestamp(), "trade", (side, float(price), float(size)))
@@ -72,11 +80,11 @@ def prepare_replay_events(book, trades, parameters, start, end, funding=None):
         push(at.timestamp(), "loop")
     push(end.timestamp(), "terminal")
     heapq.heapify(events)
-    return start, end, events
+    return (start, end, events, True) if gap_aware else (start, end, events)
 
 
 def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
-           all_taker=False, policy=quote_decision, prepared_events=None):
+           all_taker=False, policy=quote_decision, prepared_events=None, gap_aware=False):
     """Start flat; reuse prepared events only with the same immutable inputs/interval.
 
     Each run owns its event heap and order/risk state. Latency delays activation/cancellation.
@@ -85,9 +93,11 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
     if end <= start or latency < 0:
         raise ValueError("Invalid replay interval or latency")
     prepared = prepared_events if prepared_events is not None else prepare_replay_events(
-        book, trades, parameters, start, end, funding)
+        book, trades, parameters, start, end, funding, gap_aware=gap_aware)
     if prepared[:2] != (start, end):
         raise ValueError("Prepared event interval mismatch")
+    if gap_aware and (len(prepared) != 4 or prepared[3] is not True):
+        raise ValueError("Gap-aware replay needs gap-aware prepared events")
     events = list(prepared[2])
     serial = itertools.count(len(events))
     beginning, finish = start.timestamp(), end.timestamp()
@@ -103,12 +113,27 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
     fills, cycles, equity, errors = [], [], [], []
     state = {"started_at": None, "peak_equity": None, "stopped": None}
     pending_cancel = False
+    cycle_uncertain, force_gap_exit = False, False
+    uncertain_until = 0.
+    gap_events = []
+
+    def capture_gap(at, reason):
+        nonlocal cycle_uncertain, force_gap_exit
+        if not gap_aware or not (quantity or order is not None):
+            return
+        errors.append(reason)
+        gap_events.append({"time": at, "reason": reason, "quantity": quantity,
+                           "resting_order": order is not None})
+        if order is not None:
+            order["uncertain"] = True
+        if quantity:
+            cycle_uncertain, force_gap_exit = True, True
 
     def mark(at, snapshot):
+        if quantity <= 1e-12:
+            return cash  # Flat cash needs no price observation, including during outages.
         if snapshot is None or at - snapshot["timestamp"] / 1000 > 2:
             return None
-        if quantity <= 1e-12:
-            return cash
         try:
             fee = (params["market"]["taker_fee"] if params else .00045) + fee_extra
             return cash + liquidation(snapshot, quantity, fee)[0]
@@ -117,10 +142,13 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
 
     def fill(at, side, amount, price, taker):
         nonlocal cash, quantity, fees, first_fill, cycle_cash, cycle_notional, closed_pending
+        nonlocal cycle_uncertain, force_gap_exit
         if amount <= 1e-12:
             return
         if side == "buy" and quantity <= 1e-12:
             first_fill, cycle_cash, cycle_notional = at, cash, 0.
+            cycle_uncertain = bool(gap_aware and order is not None and order.get("uncertain"))
+            force_gap_exit = cycle_uncertain
         if side == "buy":
             cycle_notional += amount * price
         fee = params["market"]["taker_fee" if taker or all_taker else "maker_fee"] + fee_extra
@@ -133,6 +161,9 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         if quantity < 1e-10:
             quantity = 0.
             cycles.append({"entry_time": first_fill, "exit_time": at, "pnl": cash - cycle_cash})
+            if gap_aware:
+                cycles[-1]["observable"] = not cycle_uncertain
+            cycle_uncertain, force_gap_exit = False, False
             first_fill, closed_pending = None, True
 
     def execute_marketable(at):
@@ -171,15 +202,17 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         eligible = False
         if params_valid and params is not None:
             try:
-                validate_params(params, params["pair"], now)
+                validate_params(params, params["pair"], now, gap_aware=gap_aware)
                 eligible = True
             except (ValueError, KeyError, TypeError):
                 pass
+        eligible &= at >= uncertain_until
         state = update_trial(state, None if value is None else 1000 + value, now, eligible)
         if value is not None:
             equity.append({"time": at, "liquidation_pnl": value, "quantity": quantity,
-                           "mid_pnl": cash + quantity * sum(received[s][0][0] for s in ("bids", "asks")) / 2})
-        protective = bool(state["stopped"] or not eligible)
+                           "mid_pnl": cash if not quantity else
+                           cash + quantity * sum(received[s][0][0] for s in ("bids", "asks")) / 2})
+        protective = bool(state["stopped"] or not eligible or force_gap_exit)
         if quantity and first_fill is not None:
             protective |= at - first_fill >= HORIZON
             protective |= value is not None and value - cycle_cash <= -POSITION_STOP * cycle_notional
@@ -206,14 +239,21 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
     while events:
         at, _, _, kind, item = heapq.heappop(events)
         if kind == "book":
+            if physical is not None and at - physical["timestamp"] / 1000 > 2:
+                capture_gap(at, "Book gap during order/inventory exposure")
             physical = item
             update_queue()
         elif kind == "received_book":
+            if received is not None and at - received["received_at"] > 2:
+                capture_gap(at, "Receipt gap during order/inventory exposure")
             received = item
+        elif kind == "uncertain_clock":
+            uncertain_until = max(uncertain_until, item)
+            capture_gap(at, "Rejected clock during order/inventory exposure")
         elif kind == "parameters":
             params_valid = False
             try:
-                validate_params(item, parameters[0]["pair"], pd.Timestamp(at, unit="s", tz="UTC"))
+                validate_params(item, parameters[0]["pair"], pd.Timestamp(at, unit="s", tz="UTC"), gap_aware=gap_aware)
                 params, params_valid = item, True
             except (ValueError, KeyError, TypeError):
                 pass  # retain last costs for liquidation, never for new entries
@@ -229,6 +269,7 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         elif kind == "loop":
             if (quantity or order is not None) and (physical is None or at - physical["timestamp"] / 1000 > 2):
                 errors.append("Book gap during order/inventory exposure")
+                capture_gap(at, "Book gap during order/inventory exposure")
             if order is not None and not pending_cancel:
                 # Keep the old order exposed until cancellation acknowledgement.
                 pending_cancel = True
@@ -269,6 +310,7 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
                 funding_paid += charge
         elif kind == "missing_funding" and quantity:
             errors.append("Settled funding observation missing")
+            capture_gap(at, "Settled funding observation missing")
         elif kind == "terminal":
             order = None
             value = mark(at, physical)
@@ -281,8 +323,9 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
                     fill(at, "sell", quantity, rate, True)
                 equity.append({"time": at, "liquidation_pnl": cash, "mid_pnl": cash, "quantity": quantity})
     # Markouts require a fresh subsequent observation; no interpolation across missing time.
-    bt = book.index.astype("int64").to_numpy() / 1e9
-    mids = book.mid_price.to_numpy()
+    markout_book = book[book.clock_valid] if gap_aware else book
+    bt = markout_book.index.astype("int64").to_numpy() / 1e9
+    mids = markout_book.mid_price.to_numpy()
     for item in fills:
         for delay in (1, 5, 15, 60):
             when = item["time"] + delay
@@ -292,7 +335,18 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
                                         if idx >= 0 and 0 <= when - bt[idx] <= 2 and when <= end.timestamp() else None)
     series = np.array([r["liquidation_pnl"] for r in equity])
     max_dd = float(np.max(np.maximum.accumulate(np.r_[0., series])[1:] - series)) if len(series) else 0.
-    return {"valid": not errors, "errors": sorted(set(errors)), "net_pnl": cash if not quantity else None,
+    result = {"valid": not errors, "errors": sorted(set(errors)), "net_pnl": cash if not quantity else None,
             "fees": fees, "funding_paid": funding_paid, "round_trips": len(cycles),
             "max_drawdown": max_dd, "fills": fills, "cycles": cycles, "equity": equity,
             "latency_seconds": latency, "queue_model": "conservative_l2", "trial_state": state}
+    if gap_aware:
+        # These are conditional, observed-cycle diagnostics, not an unbiased
+        # continuous-account return: missing fills can change inventory and risk.
+        observed = [cycle for cycle in cycles if cycle["observable"]]
+        result.update(observable_round_trips=len(observed),
+                      observable_pnl=sum(c["pnl"] for c in observed),
+                      gap_affected_round_trips=len(cycles) - len(observed),
+                      gap_affected_pnl=sum(c["pnl"] for c in cycles if not c["observable"]),
+                      unresolved_inventory_quantity=quantity,
+                      capture_uncertainties=gap_events)
+    return result
