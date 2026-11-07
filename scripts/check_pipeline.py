@@ -159,21 +159,6 @@ class Checks(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises((ValueError, KeyError, TypeError)):
                 validate_params(bad, p["pair"], now)
 
-    def test_garch_failure_uses_fallback(self):
-        now = pd.Timestamp("2026-10-01", tz="UTC")
-        prices = pd.Series(100 * np.exp(np.cumsum(np.random.default_rng(1).normal(0, 1e-4, 1000))),
-                           index=pd.date_range(now, periods=1000, freq="5s"))
-        failed = SimpleNamespace(params={"omega": .1, "alpha[1]": .1, "beta[1]": .8, "nu": 5},
-                                 convergence_flag=4,
-                                 optimization_result=SimpleNamespace(success=False, message="failed"),
-                                 forecast=Mock(side_effect=AssertionError("Must not forecast a failed fit")))
-        with patch("volatility.arch_model", return_value=SimpleNamespace(fit=lambda **kw: failed)):
-            result = forecast_variance(prices)
-        self.assertEqual(result["diagnostics"]["method"], "ewma")
-        self.assertEqual(result["diagnostics"]["convergence_flag"], 4)
-        failed.forecast.assert_not_called()
-        self.assertTrue(np.isfinite(result["cumulative_log_variance"]).all())
-
     def test_sigma_known_truth_and_no_future(self):
         rng = np.random.default_rng(3)
         idx = pd.date_range("2026-10-01", periods=6000, freq="5s", tz="UTC")

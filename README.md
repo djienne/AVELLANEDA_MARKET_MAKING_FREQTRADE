@@ -85,7 +85,7 @@ The reference mid and arrival coefficients are frozen within each planning calcu
 
 Prices are sampled every five seconds using only books received before each sample. A book older than two seconds cannot supply a fresh observation. Missing intervals remain missing; returns never bridge gaps.
 
-The primary estimator is a scaled Student-t GARCH(1,1). A fit is used only if optimization converges and its parameters and forecast variances are valid. Otherwise, a one-hour-half-life EWMA is used and identified explicitly in the output.
+The estimator is a one-hour-half-life EWMA of squared five-second log returns, giving a flat variance forecast. A Student-t GARCH(1,1) used until 2026-11 fitted persistence of about 1e-4 on these returns, so it added no usable clustering. At $\gamma=2$ and the 50 USDC stake, the risk term over a full 30-minute hold is about 2e-4 USDC, roughly 3 % of one maker fee, so the variance model barely moves a decision.
 
 The model consumes cumulative forecast variance:
 
@@ -231,7 +231,7 @@ docker compose -p avellaneda-paper -f docker-compose.yml -f compose.paper.yml \
   run --rm --no-deps --entrypoint python hl-params /freqtrade/scripts/check_pipeline.py
 ```
 
-Checks include synthetic parameter recovery, future-data invariance, failed GARCH fits, an independently enumerated small control problem, denomination scaling, Freqtrade's candle lock, partial fills, cancellation races, terminal losses, rejected parameter updates, persistent stops, SQLite order/deadline restoration, reconnects and parquet failure recovery.
+Checks include synthetic parameter recovery, future-data invariance, post-only entry rejection, an independently enumerated small control problem, denomination scaling, Freqtrade's candle lock, partial fills, cancellation races, terminal losses, rejected parameter updates, persistent stops, SQLite order/deadline restoration, reconnects and parquet failure recovery.
 
 For a diagnostic calculation, write to a separate directory so it cannot race the running parameter service:
 
@@ -335,7 +335,7 @@ The normal evidence gate requires seven complete out-of-sample days, 100 complet
 | [Guéant, Lehalle & Fernandez-Tapia](https://arxiv.org/abs/1105.3115) | Inventory constraints and finite-horizon control |
 | Cartea, Jaimungal & Penalva, *Algorithmic and High-Frequency Trading*, Chapter 10 | Running inventory penalties, liquidation and adverse selection |
 | López de Prado, *Advances in Financial Machine Learning*, Chapters 7, 11 and 12 | Leakage, selection bias and chronological evaluation |
-| Jansen, *Machine Learning for Algorithmic Trading*, Chapter 9 | Volatility modelling and residual/forecast diagnostics |
+| Jansen, *Machine Learning for Algorithmic Trading*, Chapter 9 | Volatility modelling |
 | [Hyperliquid fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) and [funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding) | Cost assumptions |
 
 The [Francesco Mangia notebook](scripts/Francesco_Mangia_Avellaneda_BTC.ipynb) is retained as a historical reference with its original code and notes. It uses external datasets and different execution assumptions; its conclusions are not validation of this implementation. Cached execution outputs have been removed.
