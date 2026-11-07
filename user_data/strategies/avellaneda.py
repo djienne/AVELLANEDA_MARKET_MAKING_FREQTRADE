@@ -30,6 +30,9 @@ class avellaneda(IStrategy):
     trailing_stop = False
     order_types = {"entry": "limit", "exit": "limit", "stoploss": "market",
                    "emergency_exit": "market", "stoploss_on_exchange": False}
+    # Not post-only: Hyperliquid needs ccxt postOnly=True (tif "Alo"). Freqtrade 2025.10's schema
+    # rejects "ALO" and sends "PO" verbatim (ccxt "Po", rejected); only its Kraken class maps PO.
+    # Paper fills ignore TIF; confirm_trade_entry already refuses bids that would cross.
     order_time_in_force = {"entry": "GTC", "exit": "GTC"}
 
     def bot_start(self, **kwargs):

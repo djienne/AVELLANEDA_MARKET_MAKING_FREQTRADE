@@ -332,6 +332,21 @@ class Checks(unittest.TestCase):
         self.assertEqual(len(buys), 1)
         self.assertAlmostEqual(buys[0]["quantity"], .2)
 
+    def test_post_only_rejects_entry_that_crosses_during_latency(self):
+        start = pd.Timestamp("2026-10-01T12:01:00Z")
+        book = recorded(start, 60)
+        # Bid 99.9 is passive when decided (ask 100.01) but marketable on acceptance 5 s later.
+        book.loc[start + pd.Timedelta(seconds=1):, ["mid_price", "bid_price_0", "ask_price_0"]] = [99.5, 99.49, 99.51]
+        trades = pd.DataFrame({"side": ["buy"], "price": [101.], "size": [.1]},
+                              index=[start + pd.Timedelta(seconds=50)])
+        def policy(p, b, now, q, remaining):
+            return {"action": "buy" if q == 0 else "wait", "price": 99.9, "quantity": .5}
+        for post_only, expected in ((False, ["taker"]), (True, [])):
+            with self.subTest(post_only=post_only):
+                out = replay(book, trades, [parameters(start)], start, start + pd.Timedelta(seconds=60),
+                             latency=5, policy=policy, post_only=post_only)
+                self.assertEqual([f["liquidity"] for f in out["fills"] if f["side"] == "buy"], expected)
+
     def test_queue_consumption_and_partial_fills_on_both_sides(self):
         start = pd.Timestamp("2026-10-01T12:01:00Z")
         for side in ("buy", "sell"):

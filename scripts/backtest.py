@@ -84,10 +84,13 @@ def prepare_replay_events(book, trades, parameters, start, end, funding=None, ga
 
 
 def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_extra=0.,
-           all_taker=False, policy=quote_decision, prepared_events=None, gap_aware=False):
+           all_taker=False, policy=quote_decision, prepared_events=None, gap_aware=False, post_only=True):
     """Start flat; reuse prepared events only with the same immutable inputs/interval.
 
     Each run owns its event heap and order/risk state. Latency delays activation/cancellation.
+    post_only models Hyperliquid ALO entries: a bid that would cross at acceptance is rejected,
+    not filled as a taker (the paper strategy refuses crossing bids at confirmation). Exits stay
+    GTC so liquidations can cross.
     """
     start, end = utc(start), utc(end)
     if end <= start or latency < 0:
@@ -260,6 +263,9 @@ def replay(book, trades, parameters, start, end, funding=None, latency=1., fee_e
         elif kind == "activate":
             if order is item:
                 order["active"] = True
+                if (post_only and order["side"] == "buy" and physical is not None and
+                        at - physical["timestamp"] / 1000 <= 2 and physical["asks"][0][0] <= order["price"]):
+                    order = None  # Rejected; the next loop decides again.
                 execute_marketable(at)
                 if physical is not None and at - physical["timestamp"] / 1000 <= 2:
                     update_queue()  # Join at exchange acceptance, not local submission.
