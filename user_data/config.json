@@ -52,7 +52,7 @@
             "rateLimit": 250
         },
         "pair_whitelist": [
-            "PAXG/USDC:USDC"
+            "MNT/USDC:USDC"
         ],
         "pair_blacklist": []
     },
@@ -80,7 +80,8 @@
     "initial_state": "running",
     "force_entry_enable": false,
     "avellaneda": {
-        "paper_evaluation": false
+        "paper_evaluation": false,
+        "trial_days": null
     },
     "internals": {
         "process_throttle_secs": 15

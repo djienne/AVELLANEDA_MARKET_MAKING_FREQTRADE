@@ -12,7 +12,7 @@ from freqtrade.persistence import Trade
 from freqtrade.strategy import IStrategy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from quote_model import HORIZON, POSITION_STOP, STAKE, liquidation, quote_decision, update_trial, validate_book, validate_params, warm_quote_kernel
+from quote_model import HORIZON, POSITION_STOP, STAKE, TRIAL_DAYS, liquidation, quote_decision, update_trial, validate_book, validate_params, warm_quote_kernel
 from utils import atomic_json, get_tick_size, utc
 
 log = logging.getLogger(__name__)
@@ -49,6 +49,9 @@ class avellaneda(IStrategy):
         self.paper_evaluation = options.get("paper_evaluation", False)
         if type(self.paper_evaluation) is not bool:
             raise OperationalException("paper_evaluation must be boolean")
+        self.trial_days = options.get("trial_days", TRIAL_DAYS)  # null: no end date
+        if self.trial_days is not None and (type(self.trial_days) not in (int, float) or not self.trial_days > 0):
+            raise OperationalException("trial_days must be a positive number or null")
         self.params_dir = Path(os.getenv("AVELLANEDA_PARAMS_DIR", str(Path(__file__).resolve().parents[2] / "scripts")))
         self.state_path = Path(os.getenv("AVELLANEDA_STATE", str(Path(self.config["user_data_dir"]) / "avellaneda_trial.json")))
         self.params, self.entries_allowed, self.decision = None, False, None
@@ -136,7 +139,7 @@ class avellaneda(IStrategy):
                 if (now - first).total_seconds() >= HORIZON:
                     self.protective_reason = "holding_deadline"
             eligible = self.params_valid and (self.paper_evaluation or self.params["trade_enabled"])
-            self.state = update_trial(self.state, equity, now, eligible)
+            self.state = update_trial(self.state, equity, now, eligible, days=self.trial_days)
             if self.state["stopped"]:
                 self.protective_reason = self.state["stopped"]
             if positions and not self.params_valid:

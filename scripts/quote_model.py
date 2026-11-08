@@ -257,7 +257,8 @@ def quote_decision(p, book, now, quantity=0., remaining_seconds=HORIZON, stake=S
 
 
 def update_trial(state, equity, now, eligible, drawdown=TRIAL_DRAWDOWN, days=TRIAL_DAYS):
-    """Persistent latch; absence of valid equity never advances the high-water mark."""
+    """Persistent latch; absence of valid equity never advances the high-water mark.
+    days=None runs without an end date (continuous dry run); the drawdown stop still latches."""
     now = utc(now)
     state = dict(state)
     if state.get("stopped"):
@@ -273,6 +274,6 @@ def update_trial(state, equity, now, eligible, drawdown=TRIAL_DRAWDOWN, days=TRI
     state["equity"] = equity
     if state["peak_equity"] - equity >= drawdown:
         state["stopped"] = "trial_drawdown"
-    elif (now - utc(state["started_at"])).total_seconds() >= days * 86400:
+    elif days is not None and (now - utc(state["started_at"])).total_seconds() >= days * 86400:
         state["stopped"] = "trial_complete"
     return state

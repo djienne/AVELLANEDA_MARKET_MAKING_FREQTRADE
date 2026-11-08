@@ -512,6 +512,11 @@ class Checks(unittest.TestCase):
         self.assertEqual(state["stopped"], "trial_drawdown")
         restored = json.loads(json.dumps(state))
         self.assertEqual(update_trial(restored, 1100, now, True)["stopped"], "trial_drawdown")
+        later = now + pd.Timedelta(days=30)
+        fresh = update_trial({"started_at": None, "peak_equity": None, "stopped": None}, 1000., now, True)
+        self.assertEqual(update_trial(fresh, 1000., later, True)["stopped"], "trial_complete")
+        self.assertIsNone(update_trial(fresh, 1000., later, True, days=None)["stopped"])
+        self.assertEqual(update_trial(fresh, 989.9, later, True, days=None)["stopped"], "trial_drawdown")
 
     def test_complete_estimator_and_atomic_output(self):
         from calculate_avellaneda_parameters import estimate

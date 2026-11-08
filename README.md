@@ -6,7 +6,7 @@ The bot alternates between flat and one long position. A public-data collector s
 
 | Market | Execution | Stake | Leverage | Maximum hold | Trial drawdown stop |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `PAXG/USDC:USDC` | Paper only | Up to 50 USDC | 1× | 30 minutes | **10 USDC** |
+| `MNT/USDC:USDC` (since 2026-11-08; PAXG before) | Paper only | Up to 50 USDC | 1× | 30 minutes | **10 USDC** |
 
 > [!IMPORTANT]
 > This is an experiment, not a validated profitable strategy. Public trade crossings do not reveal our live queue position. The strategy refuses live mode, preserves its risk-stop state across restarts, and blocks entries when data or model inputs are invalid.
@@ -149,7 +149,7 @@ There is **one current parameter format**, with no schema version or compatibili
 | Position stop | Exit at a net liquidation loss of 1% of filled entry notional |
 | Holding deadline | Exit after 30 minutes from the first fill |
 | Drawdown stop | Cancel entries and flatten at 10 USDC below observed peak liquidation equity |
-| Trial duration | Seven days after valid data/model warm-up |
+| Trial duration | `avellaneda.trial_days` after valid data/model warm-up (default seven); `null` runs a continuous dry run with the other stops intact |
 | Restart | Restore the deadline, peak equity and stop latch; never reset accumulated losses |
 | Invalid data | Block entries and continue protective position management |
 
