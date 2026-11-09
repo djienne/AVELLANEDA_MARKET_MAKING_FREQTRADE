@@ -28,6 +28,8 @@ Inspect the result and blocking reasons. Insufficient data is inconclusive; test
 
 Grid follow-up (done 2026-11-08): the fixed gamma grid `0.1, 1, 2, 4, 10` × planning horizons `5, 15, 30, 45, 60` minutes, at `1s` and `10s` latency, was repeated on 36 hub days (Oct 2 – Nov 6, holdout from Oct 26), before and after post-only replay, EWMA and the markout term. No cell is profitable. With the markout term the model abstains on PAXG at the 1.5 bp maker fee, and a 98-perp screen found no market with a positive maker edge. Local reports and runnable studies: `runtime/paper/validation/joint_grid_hub_20261107/`, `joint_grid_hub_v2_20261108/` and `market_screen_20261108/` (older: `joint_grid_20261001/`). Rerun the v2 study and the screen only when the fee tier, order size or model inputs change. Keep stake, stops and the 30-minute holding limit fixed, and preserve the 45/60-minute planner-deadline caveat.
 
+Wide-quote follow-up (2026-11-09). Screen v2 (`market_screen_v2_20261108/`) covered 98 perps from the touch to 120 bp: fill value stays at about −4 to −5 bp out to 30 bp, so widening does not help. Only bids 50–120 bp below mid catch wicks that rebound within 15 s, and that region lies beyond the model's 24-h markout support. One candidate is frozen in `wide_bid_useless_20261109/FROZEN.md`: a USELESS bid 80 bp below mid with a best-ask exit. It passed the in-sample kill check narrowly (+11.5 bp/trip at 1 s, +2 bp/trip on the holdout). Its single confirmation runs after 2026-11-26 00:00 UTC on Nov 5–25; follow `RESULTS.md` there and do not change the rule or the pass test.
+
 ## Code and delivery
 
 - Use four-space indentation, snake_case functions/variables, PascalCase classes, and uppercase constants/environment variables.
